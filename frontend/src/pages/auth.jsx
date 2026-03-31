@@ -96,7 +96,7 @@ const Auth = ({ onNavigate }) => {
     <div
       className="relative min-h-screen flex items-center justify-center bg-fixed bg-cover bg-center p-4"
       style={{
-        backgroundImage: "url('https://www.pixelstalk.net/wp-content/uploads/2016/06/Download-HD-Nature-Backgrounds.jpg')",
+        backgroundImage: "url('https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1350&q=80')",
       }}
     >
       <div className="absolute inset-0 bg-black/30"></div>
@@ -110,12 +110,12 @@ const Auth = ({ onNavigate }) => {
           ← Back to Home
         </Button>
 
-        <Card className="border-2 shadow-2xl">
+        <Card className="border border-white/30 shadow-2xl bg-white/5 backdrop-blur-md">
           <CardHeader className="text-center pb-4">
             <div className="flex justify-center mb-4">
               <div className="flex items-center gap-2">
-                <Mountain className="h-10 w-10 text-blue-600" />
-                <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                <Mountain className="h-10 w-10 text-white" />
+                <span className="text-2xl font-bold text-white">
                   Nepal Tourism
                 </span>
               </div>
@@ -125,22 +125,22 @@ const Auth = ({ onNavigate }) => {
           <CardContent>
             {!selectedRole ? (
               <div>
-                <CardTitle className="text-center mb-6">Select Your Role</CardTitle>
+                <CardTitle className="text-center mb-6 text-white">Select Your Role</CardTitle>
                 <div className="space-y-3">
                   {roles.map((role) => (
                     <Card
                       key={role.id}
-                      className="cursor-pointer border-2 hover:border-blue-500 hover:bg-blue-50 transition-all"
+                      className="cursor-pointer border border-white/30 hover:border-white/50 hover:bg-white/10 transition-all bg-white/5 backdrop-blur-md"
                       onClick={() => setSelectedRole(role.id)}
                     >
                       <CardHeader className="p-4">
                         <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <role.icon className="h-5 w-5 text-blue-600" />
+                          <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <role.icon className="h-5 w-5 text-white" />
                           </div>
                           <div>
-                            <CardTitle className="text-base">{role.label}</CardTitle>
-                            <CardDescription className="text-sm mt-1">
+                            <CardTitle className="text-base text-white">{role.label}</CardTitle>
+                            <CardDescription className="text-sm mt-1 text-white/70">
                               {role.description}
                             </CardDescription>
                           </div>
@@ -152,8 +152,8 @@ const Auth = ({ onNavigate }) => {
               </div>
             ) : (
               <div>
-                <div className="mb-6 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
-                  <Badge variant="secondary" className="flex items-center gap-2">
+                <div className="mb-6 p-3 bg-white/10 backdrop-blur rounded-lg flex items-center justify-between border border-white/30">
+                  <Badge className="flex items-center gap-2 bg-white/20 text-white hover:bg-white/30">
                     {React.createElement(roles.find(r => r.id === selectedRole).icon, { className: "h-4 w-4" })}
                     {roles.find(r => r.id === selectedRole).label}
                   </Badge>
@@ -161,6 +161,7 @@ const Auth = ({ onNavigate }) => {
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedRole(null)}
+                    className="text-white hover:bg-white/20"
                   >
                     Change
                   </Button>
@@ -168,19 +169,19 @@ const Auth = ({ onNavigate }) => {
 
                 <Tabs defaultValue="login" className="w-full">
                   {error && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <p className="text-red-600 text-sm">{error}</p>
+                    <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg backdrop-blur">
+                      <p className="text-red-200 text-sm">{error}</p>
                     </div>
                   )}
                   
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
-                    <TabsTrigger value="login">Login</TabsTrigger>
-                    <TabsTrigger value="signup">Sign Up</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-2 mb-6 bg-white/10 backdrop-blur">
+                    <TabsTrigger value="login" className="text-white">Login</TabsTrigger>
+                    <TabsTrigger value="signup" className="text-white">Sign Up</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="login" className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
+                      <Label htmlFor="email" className="text-white">Email</Label>
                       <Input
                         id="email"
                         type="email"
@@ -191,7 +192,7 @@ const Auth = ({ onNavigate }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
+                      <Label htmlFor="password" className="text-white">Password</Label>
                       <Input
                         id="password"
                         type="password"
@@ -204,7 +205,7 @@ const Auth = ({ onNavigate }) => {
                     <div className="flex justify-end">
                       <button 
                         type="button"
-                        className="text-sm text-blue-600 hover:underline"
+                        className="text-sm text-white/80 hover:text-white hover:underline"
                         onClick={() => setShowForgotPassword(true)}
                       >
                         Forgot Password?
@@ -220,10 +221,10 @@ const Auth = ({ onNavigate }) => {
 
                     <div className="relative my-4">
                       <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
+                        <span className="w-full border-t border-white/20" />
                       </div>
                       <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-white px-2 text-muted-foreground">Or continue with</span>
+                        <span className="bg-transparent px-2 text-white/70">Or continue with</span>
                       </div>
                     </div>
 
@@ -236,7 +237,7 @@ const Auth = ({ onNavigate }) => {
 
                   <TabsContent value="signup" className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
+                      <Label htmlFor="name" className="text-white">Full Name</Label>
                       <Input
                         id="name"
                         type="text"
@@ -247,7 +248,7 @@ const Auth = ({ onNavigate }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="signup-email">Email</Label>
+                      <Label htmlFor="signup-email" className="text-white">Email</Label>
                       <Input
                         id="signup-email"
                         type="email"
@@ -258,7 +259,7 @@ const Auth = ({ onNavigate }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="signup-password">Password</Label>
+                      <Label htmlFor="signup-password" className="text-white">Password</Label>
                       <Input
                         id="signup-password"
                         type="password"
@@ -269,7 +270,7 @@ const Auth = ({ onNavigate }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="confirm-password">Confirm Password</Label>
+                      <Label htmlFor="confirm-password" className="text-white">Confirm Password</Label>
                       <Input
                         id="confirm-password"
                         type="password"
@@ -294,10 +295,10 @@ const Auth = ({ onNavigate }) => {
         
         {showForgotPassword && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
+            <Card className="w-full max-w-md mx-4 border border-white/30 shadow-2xl bg-white/10 backdrop-blur-md">
               <CardHeader>
-                <CardTitle>Reset Password</CardTitle>
-                <CardDescription>Enter your email to receive a password reset link</CardDescription>
+                <CardTitle className="text-white">Reset Password</CardTitle>
+                <CardDescription className="text-white/70">Enter your email to receive a password reset link</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Input
@@ -306,11 +307,11 @@ const Auth = ({ onNavigate }) => {
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
                 />
-                {error && <p className="text-red-600 text-sm">{error}</p>}
+                {error && <p className="text-red-200 text-sm">{error}</p>}
                 <div className="flex gap-2">
                   <Button 
                     variant="outline"
-                    className="flex-1"
+                    className="flex-1 text-white border-white/30 hover:bg-white/10"
                     onClick={() => {
                       setShowForgotPassword(false);
                       setError('');
@@ -319,7 +320,7 @@ const Auth = ({ onNavigate }) => {
                     Cancel
                   </Button>
                   <Button 
-                    className="flex-1 bg-blue-600"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
                     onClick={async () => {
                       if (!formData.email) {
                         setError('Please enter your email');
