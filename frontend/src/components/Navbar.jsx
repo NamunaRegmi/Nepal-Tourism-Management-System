@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Mountain, Menu, X, User, LogOut, Home, Compass } from 'lucide-react';
+import { Mountain, Menu, X, User, LogOut, Home, Compass, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const navLinks = [
   { label: 'Home', key: 'home' },
   { label: 'Destinations', key: 'destination-results' },
+  { label: 'Tour guides', key: 'guides' },
   { label: 'About', key: 'about' },
 ];
 
@@ -43,6 +44,7 @@ export default function Navbar({ currentPage, onNavigate }) {
     const role = user?.role?.toLowerCase();
     if (role === 'admin') onNavigate('admin-dashboard');
     else if (role === 'provider') onNavigate('provider-dashboard');
+    else if (role === 'guide') onNavigate('guide-dashboard');
     else onNavigate('user-dashboard');
   };
 

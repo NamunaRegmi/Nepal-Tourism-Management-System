@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Mountain, Compass, Package, Heart, Settings, LogOut, Plus, Hotel, CalendarCheck, DollarSign, Users, TrendingUp, Search, Menu, Bell, BarChart3, MapPin, Star, Eye, Edit, Trash2, Save, X, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,25 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { bookingService, hotelService, destinationService, authService } from '@/services/api';
-import { cn } from '@/lib/utils';
-import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
-
-const DEFAULT_HOTEL_IMAGE = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800';
-
-/** API may send Decimal as string; avoid string concatenation in reduce */
-function toMoneyNumber(value) {
-  const n = Number.parseFloat(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function formatRs(amount) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return '0';
-  return Math.round(n).toLocaleString('en-IN');
-}
 
 const ProviderDashboard = ({ onNavigate }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -36,15 +21,7 @@ const ProviderDashboard = ({ onNavigate }) => {
   const [hotels, setHotels] = useState([]);
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [user, setUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem('user');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
 
   // Property management states
   const [isAddingHotel, setIsAddingHotel] = useState(false);
@@ -71,7 +48,13 @@ const ProviderDashboard = ({ onNavigate }) => {
     pendingBookings: 0
   });
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) setUser(JSON.parse(storedUser));
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
     try {
       setLoading(true);
       const [hotelsRes, bookingsRes, destRes] = await Promise.all([
@@ -80,48 +63,26 @@ const ProviderDashboard = ({ onNavigate }) => {
         destinationService.getAll()
       ]);
       
-      const allHotels = hotelsRes.data || [];
-      setHotels(allHotels);
+      setHotels(hotelsRes.data || []);
       setBookings(bookingsRes.data || []);
       setDestinations(destRes.data || []);
-
-      const meRaw = localStorage.getItem('user');
-      const me = meRaw ? JSON.parse(meRaw) : null;
-      const myHotelCount =
-        me?.id != null
-          ? allHotels.filter((h) => Number(h.provider) === Number(me.id)).length
-          : 0;
-
+      
+      // Calculate stats
       const bookingsData = bookingsRes.data || [];
-      const totalRevenue = bookingsData.reduce(
-        (sum, booking) => sum + toMoneyNumber(booking.total_price),
-        0
-      );
       setStats({
         totalBookings: bookingsData.length,
-        totalRevenue,
-        activeProperties: myHotelCount,
-        averageRating: 4.5,
-        monthlyGrowth: 15.3,
+        totalRevenue: bookingsData.reduce((sum, booking) => sum + (booking.total_price || 0), 0),
+        activeProperties: (hotelsRes.data || []).length,
+        averageRating: 4.5, // Placeholder - should come from reviews
+        monthlyGrowth: 15.3, // Placeholder
         pendingBookings: bookingsData.filter(b => b.status === 'pending').length
       });
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to load properties. Please refresh or log in again.';
-      console.error('API Error Details:', error.response?.data, 'Status:', error.response?.status);
-      setError(`Error: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) setUser(JSON.parse(storedUser));
-    fetchData();
-  }, [fetchData]);
-
-  useAppDataSync(fetchData);
+  };
 
   const handleLogout = async () => {
     try {
@@ -167,21 +128,16 @@ const ProviderDashboard = ({ onNavigate }) => {
 
   const handleSaveHotel = async () => {
     try {
-      const payload = {
-        ...hotelForm,
-        image: (hotelForm.image && String(hotelForm.image).trim()) || DEFAULT_HOTEL_IMAGE,
-      };
       if (isAddingHotel) {
-        await hotelService.create(payload);
+        await hotelService.create(hotelForm);
       } else if (editingHotel) {
-        await hotelService.update(editingHotel.id, payload);
+        await hotelService.update(editingHotel.id, hotelForm);
       }
-
+      
       setHotelDialogOpen(false);
-      notifyAppDataChanged();
+      fetchData(); // Refresh data
     } catch (error) {
       console.error('Failed to save hotel:', error);
-      window.alert(error.response?.data ? JSON.stringify(error.response.data) : 'Could not save property. Check required fields and API.');
     }
   };
 
@@ -189,10 +145,9 @@ const ProviderDashboard = ({ onNavigate }) => {
     if (window.confirm('Are you sure you want to delete this property?')) {
       try {
         await hotelService.delete(hotelId);
-        notifyAppDataChanged();
+        setHotels(hotels.filter(h => h.id !== hotelId));
       } catch (error) {
         console.error('Failed to delete hotel:', error);
-        window.alert(error.response?.data?.error || 'Could not delete this property.');
       }
     }
   };
@@ -210,7 +165,6 @@ const ProviderDashboard = ({ onNavigate }) => {
           b.id === booking.id ? { ...b, status: 'cancelled' } : b
         ));
       }
-      notifyAppDataChanged();
     } catch (error) {
       console.error('Booking action failed:', error);
     }
@@ -229,7 +183,7 @@ const ProviderDashboard = ({ onNavigate }) => {
     },
     {
       title: "Revenue",
-      value: `Rs. ${formatRs(stats.totalRevenue)}`,
+      value: `Rs. ${stats.totalRevenue.toLocaleString()}`,
       change: "+23%",
       icon: DollarSign,
       color: "green",
@@ -264,21 +218,14 @@ const ProviderDashboard = ({ onNavigate }) => {
     (booking.user && booking.user.username.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const filteredHotels = hotels.filter((hotel) => {
-    const q = searchQuery.toLowerCase();
-    const name = (hotel.name || '').toLowerCase();
-    const addr = (hotel.address || '').toLowerCase();
-    const destId = hotel.destination_id ?? hotel.destination;
-    const dest = destinations.find((d) => d.id === destId);
-    const destName = (dest?.name || '').toLowerCase();
-    return name.includes(q) || addr.includes(q) || destName.includes(q);
-  });
-
-  const isMyHotel = (hotel) =>
-    user?.id != null && Number(hotel.provider) === Number(user.id);
+  const filteredHotels = hotels.filter(hotel => 
+    hotel.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    hotel.address.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -336,11 +283,11 @@ const ProviderDashboard = ({ onNavigate }) => {
                 </div>
               )}
             </div>
-            </div>
           </div>
         </header>
 
       <div className="flex">
+        {/* Sidebar */}
         <aside className={`${sidebarOpen ? 'block' : 'hidden'} lg:block w-64 bg-white border-r border-gray-200 min-h-screen`}>
           <nav className="p-4 space-y-2">
             <Button 
@@ -386,8 +333,10 @@ const ProviderDashboard = ({ onNavigate }) => {
           </nav>
         </aside>
 
+        {/* Main Content */}
         <main className="flex-1 p-6">
           <div className="max-w-7xl mx-auto">
+            {/* Overview Tab */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -395,12 +344,13 @@ const ProviderDashboard = ({ onNavigate }) => {
                     <h2 className="text-2xl font-bold text-gray-900">Welcome back, {user?.name || 'Provider'}!</h2>
                     <p className="text-gray-500">Here's an overview of your tourism business performance.</p>
                   </div>
-                  <Button className="bg-gradient-to-r from-green-600 to-blue-600 pointer-events-auto cursor-pointer" onClick={handleAddHotel}>
+                  <Button className="bg-gradient-to-r from-green-600 to-blue-600" onClick={handleAddHotel}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Property
                   </Button>
                 </div>
 
+                {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {statCards.map((stat, index) => (
                     <Card key={index} className={`${stat.bgColor} ${stat.borderColor} border-2`}>
@@ -425,6 +375,7 @@ const ProviderDashboard = ({ onNavigate }) => {
                   ))}
                 </div>
 
+                {/* Recent Bookings */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -436,8 +387,8 @@ const ProviderDashboard = ({ onNavigate }) => {
                         View All
                       </Button>
                     </div>
-                  </CardHeader>
                   <CardDescription>Latest booking requests from customers</CardDescription>
+                </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {filteredBookings.slice(0, 5).map((booking) => (
@@ -469,31 +420,25 @@ const ProviderDashboard = ({ onNavigate }) => {
               </div>
             )}
 
+            {/* Properties Tab */}
             {activeTab === 'properties' && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <Hotel className="h-5 w-5 mr-2" />
-                      <CardTitle>Properties</CardTitle>
+                      <CardTitle>My Properties</CardTitle>
                     </div>
-                    <Button className="pointer-events-auto cursor-pointer" onClick={handleAddHotel}>
+                    <Button onClick={handleAddHotel}>
                       <Plus className="h-4 w-4 mr-2" />
                       Add Property
                     </Button>
                   </div>
+                  <CardDescription>Manage your hotels and properties</CardDescription>
                 </CardHeader>
-                <CardDescription>
-                  Same active hotels guests see on destination pages. You can edit or remove only listings you own.
-                </CardDescription>
                 <CardContent>
                   {loading ? (
                     <div className="text-center py-8">Loading properties...</div>
-                  ) : error ? (
-                    <div className="text-center py-8">
-                      <Hotel className="h-12 w-12 text-red-400 mx-auto mb-4" />
-                      <p className="text-red-600">{error}</p>
-                    </div>
                   ) : filteredHotels.length === 0 ? (
                     <div className="text-center py-8">
                       <Hotel className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -506,31 +451,25 @@ const ProviderDashboard = ({ onNavigate }) => {
                           <CardHeader>
                             <div className="flex items-center justify-between">
                               <CardTitle className="text-lg">{hotel.name}</CardTitle>
-                              <Badge
-                                className={
-                                  isMyHotel(hotel)
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-slate-100 text-slate-700'
-                                }
-                              >
-                                {isMyHotel(hotel) ? 'Your listing' : 'Site listing'}
+                              <Badge className={
+                                hotel.is_verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                              }>
+                                {hotel.is_verified ? 'Verified' : 'Pending'}
                               </Badge>
                             </div>
-                            {isMyHotel(hotel) && (
-                              <div className="flex space-x-2">
-                                <Button variant="ghost" size="sm" onClick={() => handleEditHotel(hotel)}>
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteHotel(hotel.id)}
-                                  className="text-red-600 hover:text-red-800"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
+                            <div className="flex space-x-2">
+                              <Button variant="ghost" size="sm" onClick={() => handleEditHotel(hotel)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleDeleteHotel(hotel.id)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </CardHeader>
                           <CardContent>
                             <div className="space-y-2">
@@ -549,6 +488,7 @@ const ProviderDashboard = ({ onNavigate }) => {
               </Card>
             )}
 
+            {/* Bookings Tab */}
             {activeTab === 'bookings' && (
               <Card>
                 <CardHeader>
@@ -616,6 +556,7 @@ const ProviderDashboard = ({ onNavigate }) => {
               </Card>
             )}
 
+            {/* Earnings Tab */}
             {activeTab === 'earnings' && (
               <div className="space-y-6">
                 <Card>
@@ -627,16 +568,16 @@ const ProviderDashboard = ({ onNavigate }) => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="p-4 border rounded-lg">
                         <h4 className="font-semibold mb-2">Total Revenue</h4>
-                        <p className="text-2xl font-bold text-green-600">Rs. {formatRs(stats.totalRevenue)}</p>
+                        <p className="text-2xl font-bold text-green-600">Rs. {stats.totalRevenue.toLocaleString()}</p>
                       </div>
                       <div className="p-4 border rounded-lg">
                         <h4 className="font-semibold mb-2">This Month</h4>
-                        <p className="text-2xl font-bold text-blue-600">Rs. {formatRs(stats.totalRevenue * 0.3)}</p>
+                        <p className="text-2xl font-bold text-blue-600">Rs. {(stats.totalRevenue * 0.3).toLocaleString()}</p>
                       </div>
                       <div className="p-4 border rounded-lg">
                         <h4 className="font-semibold mb-2">Average per Booking</h4>
                         <p className="text-2xl font-bold text-purple-600">
-                          Rs. {stats.totalBookings > 0 ? formatRs(stats.totalRevenue / stats.totalBookings) : '0'}
+                          Rs. {stats.totalBookings > 0 ? Math.round(stats.totalRevenue / stats.totalBookings) : 0}
                         </p>
                       </div>
                     </div>
@@ -645,6 +586,7 @@ const ProviderDashboard = ({ onNavigate }) => {
               </div>
             )}
 
+            {/* Reviews Tab */}
             {activeTab === 'reviews' && (
               <Card>
                 <CardHeader>
@@ -663,6 +605,7 @@ const ProviderDashboard = ({ onNavigate }) => {
         </main>
       </div>
 
+      {/* Add/Edit Hotel Dialog */}
       <Dialog open={hotelDialogOpen} onOpenChange={setHotelDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -680,30 +623,19 @@ const ProviderDashboard = ({ onNavigate }) => {
                 />
               </div>
               <div>
-                <Label htmlFor="destination-native">Destination</Label>
-                <select
-                  id="destination-native"
-                  className={cn(
-                    'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
-                  )}
-                  value={hotelForm.destination_id}
-                  onChange={(e) =>
-                    setHotelForm({ ...hotelForm, destination_id: e.target.value })
-                  }
-                >
-                  <option value="">Select destination</option>
-                  {destinations.map((dest) => (
-                    <option key={dest.id} value={String(dest.id)}>
-                      {dest.name}
-                    </option>
-                  ))}
-                </select>
-                {destinations.length === 0 && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    No destinations loaded. Ensure the backend is running and refresh the page.
-                  </p>
-                )}
+                <Label htmlFor="destination">Destination</Label>
+                <Select value={hotelForm.destination_id} onValueChange={(value) => setHotelForm({...hotelForm, destination_id: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select destination" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {destinations.map((dest) => (
+                      <SelectItem key={dest.id} value={dest.id.toString()}>
+                        {dest.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="price">Price per Night (Rs.)</Label>

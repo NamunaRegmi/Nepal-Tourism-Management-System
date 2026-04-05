@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { destinationService, hotelService } from '@/services/api';
 import BookingModal from '@/components/BookingModal';
+import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 import { Star, MapPin, Calendar, CheckCircle, Cloud, Wind, Thermometer, ArrowLeft, CloudSun, Map as MapIcon, Info } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -53,15 +54,11 @@ function DestinationDetail({ destinationId, onNavigate }) {
     return !!localStorage.getItem('user') && !!localStorage.getItem('access_token');
   };
 
-  useEffect(() => {
-    if (destinationId) {
-      fetchData();
-    }
-  }, [destinationId]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!destinationId) return;
     try {
       setLoading(true);
+      setError(null);
       const destRes = await destinationService.getById(destinationId);
       setDestination(destRes.data);
 
@@ -73,7 +70,13 @@ function DestinationDetail({ destinationId, onNavigate }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [destinationId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useAppDataSync(fetchData);
 
   const handleBookClick = (hotel) => {
     if (!isAuthenticated()) {
@@ -330,6 +333,8 @@ function DestinationDetail({ destinationId, onNavigate }) {
           isOpen={isBookingOpen}
           onClose={() => setIsBookingOpen(false)}
           onSuccess={() => {
+            notifyAppDataChanged();
+            fetchData();
             alert("Booking successful!"); // Or show a nice toast
           }}
         />

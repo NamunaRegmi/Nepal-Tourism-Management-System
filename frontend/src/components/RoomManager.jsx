@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { roomService } from '@/services/api';
+import { notifyAppDataChanged } from '@/lib/dataSync';
 
 const RoomManager = ({ hotel, onClose }) => {
     const [rooms, setRooms] = useState([]);
@@ -37,6 +38,7 @@ const RoomManager = ({ hotel, onClose }) => {
             setIsAddRoomOpen(false);
             setNewRoom({ room_type: '', price: '', capacity: '', quantity: 1, amenities: '', is_available: true });
             fetchRooms();
+            notifyAppDataChanged();
         } catch (err) {
             console.error("Failed to create room", err);
             alert("Failed to create room");
@@ -48,6 +50,7 @@ const RoomManager = ({ hotel, onClose }) => {
         try {
             await roomService.delete(id);
             fetchRooms();
+            notifyAppDataChanged();
         } catch (err) {
             console.error("Failed to delete room", err);
         }

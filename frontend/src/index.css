@@ -33,3 +33,12 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
+
+.homepage-section {
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+
+.homepage-section-heading {
+  text-align: left;
+}

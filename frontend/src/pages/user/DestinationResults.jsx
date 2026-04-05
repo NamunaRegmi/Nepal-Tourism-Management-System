@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MapPin, Star, List, Grid, ChevronRight, Map as MapIcon, Info, CloudSun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { destinationService } from '@/services/api';
+import { useAppDataSync } from '@/lib/dataSync';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -42,25 +43,52 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
     const [destinations, setDestinations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
+    const [error, setError] = useState(null);
+
+    const fetchDestinations = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const res = await destinationService.getAll();
+            setDestinations(res.data || []);
+        } catch (err) {
+            console.error("Failed to fetch destinations", err);
+            setError('Failed to load destinations. Please try again.');
+            setDestinations([]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchDestinations = async () => {
-            try {
-                const res = await destinationService.getAll();
-                setDestinations(res.data);
-            } catch (err) {
-                console.error("Failed to fetch destinations", err);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchDestinations();
-    }, []);
+    }, [fetchDestinations]);
+
+    useAppDataSync(fetchDestinations);
 
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading destinations...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <div className="text-red-600 mb-4">
+                        <Info className="h-12 w-12 mx-auto mb-2" />
+                        <p>{error}</p>
+                    </div>
+                    <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700">
+                        Try Again
+                    </Button>
+                </div>
             </div>
         );
     }
@@ -71,7 +99,7 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
             <div className="max-w-7xl mx-auto px-4 py-3 text-sm flex items-center gap-2 text-blue-600">
                 <button onClick={() => onNavigate('home')} className="hover:underline">Home</button>
                 <ChevronRight className="h-4 w-4 text-gray-400" />
-                <button onClick={() => onNavigate('user-dashboard')} className="hover:underline">Nepal</button>
+                <button onClick={() => onNavigate('home')} className="hover:underline">Nepal</button>
                 <ChevronRight className="h-4 w-4 text-gray-400" />
                 <span className="text-gray-600">Destinations</span>
             </div>
@@ -106,16 +134,6 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
                                     {destinations.length} LOCATIONS
                                 </div>
                             </div>
-
-                            {/* Info Box */}
-                            <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                                <div className="flex gap-3 text-blue-800">
-                                    <Info className="h-5 w-5 flex-shrink-0" />
-                                    <p className="text-sm">
-                                        Showing {destinations.length} destinations available in Nepal. Explore the best places to visit.
-                                    </p>
-                                </div>
-                            </div>
                         </div>
                     </aside>
 
@@ -147,75 +165,118 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
                         </header>
 
                         {/* List of Destinations */}
-                        <div className="space-y-4">
-                            {destinations.map((dest) => (
-                                <Card key={dest.id} className="overflow-hidden border border-gray-200 hover:border-blue-400 transition-colors cursor-pointer group shadow-sm bg-white" onClick={() => onSelectDestination(dest.id)}>
-                                    <div className="flex flex-col md:flex-row">
-                                        {/* Image Section */}
-                                        <div className="w-full md:w-72 h-64 md:h-auto overflow-hidden relative">
-                                            <img
-                                                src={getDestinationImage(dest)}
-                                                alt={dest.name}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                            />
-                                            <div className="absolute top-2 right-2 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm">
-                                                <CloudSun className="h-4 w-4 text-blue-600" />
-                                            </div>
-                                        </div>
-
-                                        {/* Info Section */}
-                                        <div className="flex-1 p-6 flex flex-col justify-between">
-                                            <div>
-                                                <div className="flex justify-between items-start">
+                        <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6' : 'space-y-4'}>
+                            {destinations.length === 0 ? (
+                                <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                                    <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-gray-600 mb-2">No destinations found</h3>
+                                    <p className="text-gray-500 mb-4">We couldn't find any destinations at the moment.</p>
+                                    <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700">
+                                        Refresh
+                                    </Button>
+                                </div>
+                            ) : (
+                                destinations.map((dest) => (
+                                    <Card
+                                        key={dest.id}
+                                        className={viewMode === 'grid'
+                                            ? 'overflow-hidden border border-gray-200 hover:border-blue-400 transition-colors cursor-pointer shadow-sm bg-white'
+                                            : 'overflow-hidden border border-gray-200 hover:border-blue-400 transition-colors cursor-pointer group shadow-sm bg-white'}
+                                        onClick={() => onSelectDestination(dest.id)}
+                                    >
+                                        {viewMode === 'grid' ? (
+                                            <div className="flex flex-col h-full">
+                                                <div className="h-52 overflow-hidden relative">
+                                                    <img
+                                                        src={getDestinationImage(dest)}
+                                                        alt={dest.name}
+                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                    />
+                                                    <div className="absolute top-3 right-3 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm">
+                                                        <CloudSun className="h-4 w-4 text-blue-600" />
+                                                    </div>
+                                                </div>
+                                                <div className="p-5 flex-1 flex flex-col justify-between">
                                                     <div>
-                                                        <h2 className="text-xl font-bold text-blue-600 hover:underline">
-                                                            {dest.name}
-                                                        </h2>
-                                                        <div className="flex items-center gap-2 mt-1 text-sm text-blue-600">
-                                                            <MapPin className="h-3.5 w-3.5" />
-                                                            <span>{dest.province}</span>
-                                                            <span className="text-gray-400">·</span>
-                                                            <span className="underline cursor-pointer">Show on map</span>
+                                                        <h2 className="text-xl font-bold text-gray-900 mb-2">{dest.name}</h2>
+                                                        <p className="text-sm text-gray-500 mb-3">{dest.province}</p>
+                                                        <div className="text-sm text-gray-700 line-clamp-3">{dest.description}</div>
+                                                    </div>
+                                                    <div className="mt-4 flex items-center justify-between">
+                                                        <span className="text-xs uppercase tracking-[0.15em] text-blue-600 font-semibold">{dest.best_time_to_visit}</span>
+                                                        <div className="bg-blue-900 text-white px-3 py-1 rounded-full text-sm font-bold">9.8</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col md:flex-row">
+                                                {/* Image Section */}
+                                                <div className="w-full md:w-72 h-64 md:h-auto overflow-hidden relative">
+                                                    <img
+                                                        src={getDestinationImage(dest)}
+                                                        alt={dest.name}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    />
+                                                    <div className="absolute top-2 right-2 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm">
+                                                        <CloudSun className="h-4 w-4 text-blue-600" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Info Section */}
+                                                <div className="flex-1 p-6 flex flex-col justify-between">
+                                                    <div>
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <h2 className="text-xl font-bold text-blue-600 hover:underline">
+                                                                    {dest.name}
+                                                                </h2>
+                                                                <div className="flex items-center gap-2 mt-1 text-sm text-blue-600">
+                                                                    <MapPin className="h-3.5 w-3.5" />
+                                                                    <span>{dest.province}</span>
+                                                                    <span className="text-gray-400">·</span>
+                                                                    <span className="underline cursor-pointer">Show on map</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Rating Box */}
+                                                            <div className="flex items-center gap-2 text-right">
+                                                                <div>
+                                                                    <p className="text-sm font-bold text-gray-900 leading-none">Exceptional</p>
+                                                                    <p className="text-xs text-gray-500 mt-1">842 reviews</p>
+                                                                </div>
+                                                                <div className="bg-blue-900 text-white p-2 rounded-t-lg rounded-br-lg font-bold text-lg min-w-[40px] text-center">
+                                                                    9.8
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="mt-4 text-sm text-gray-700 line-clamp-2 md:line-clamp-3">
+                                                            {dest.description}
+                                                        </div>
+
+                                                        <div className="mt-3 flex flex-wrap gap-2">
+                                                            {dest.highlights?.slice(0, 3).map((h, i) => (
+                                                                <span key={i} className="text-[11px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                                                    {h}
+                                                                </span>
+                                                            ))}
                                                         </div>
                                                     </div>
 
-                                                    {/* Rating Box */}
-                                                    <div className="flex items-center gap-2 text-right">
-                                                        <div>
-                                                            <p className="text-sm font-bold text-gray-900 leading-none">Exceptional</p>
-                                                            <p className="text-xs text-gray-500 mt-1">842 reviews</p>
+                                                    <div className="mt-6 flex items-end justify-between border-t border-gray-100 pt-4">
+                                                        <div className="text-sm text-gray-600">
+                                                            <span className="font-bold text-green-700">Best time to visit:</span> {dest.best_time_to_visit}
                                                         </div>
-                                                        <div className="bg-blue-900 text-white p-2 rounded-t-lg rounded-br-lg font-bold text-lg min-w-[40px] text-center">
-                                                            9.8
-                                                        </div>
+                                                        <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg font-bold rounded-md">
+                                                            View Destination
+                                                        </Button>
                                                     </div>
                                                 </div>
-
-                                                <div className="mt-4 text-sm text-gray-700 line-clamp-2 md:line-clamp-3">
-                                                    {dest.description}
-                                                </div>
-
-                                                <div className="mt-3 flex flex-wrap gap-2">
-                                                    {dest.highlights?.slice(0, 3).map((h, i) => (
-                                                        <span key={i} className="text-[11px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                                                            {h}
-                                                        </span>
-                                                    ))}
-                                                </div>
                                             </div>
-
-                                            <div className="mt-6 flex items-end justify-between border-t border-gray-100 pt-4">
-                                                <div className="text-sm text-gray-600">
-                                                    <span className="font-bold text-green-700">Best time to visit:</span> {dest.best_time_to_visit}
-                                                </div>
-                                                <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg font-bold rounded-md">
-                                                    View Destination
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </Card>
-                            ))}
+                                        )}
+                                    </Card>
+                                ))
+                            )}
                         </div>
                     </main>
                 </div>

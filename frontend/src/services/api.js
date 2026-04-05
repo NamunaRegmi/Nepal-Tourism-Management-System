@@ -54,6 +54,7 @@ export const authService = {
     register: (userData) => api.post('auth/register/', userData),
     googleLogin: (credential, role) => api.post('auth/google/', { credential, role }),
     getProfile: () => api.get('auth/profile/'),
+    updateProfile: (data) => api.put('auth/profile/', data),
 };
 
 export const destinationService = {
@@ -68,7 +69,7 @@ export const hotelService = {
     getByDestination: (destId) => api.get(`destinations/${destId}/hotels/`),
     getMyHotels: () => api.get('provider/hotels/'),
     getById: (id) => api.get(`hotels/${id}/`),
-    create: (destId, data) => api.post(`destinations/${destId}/hotels/`, data),
+    create: (data) => api.post('provider/hotels/', data),
     update: (id, data) => api.put(`hotels/${id}/`, data),
     delete: (id) => api.delete(`hotels/${id}/`),
 };
@@ -92,12 +93,33 @@ export const packageService = {
 export const bookingService = {
     getMyBookings: () => api.get('bookings/'),
     create: (data) => api.post('bookings/', data),
+    update: (id, data) => api.put(`bookings/${id}/`, data),
     updateStatus: (id, status) => api.put(`bookings/${id}/`, { status }),
     getById: (id) => api.get(`bookings/${id}/`),
 };
 
+export const guideService = {
+    list: (params = {}) => api.get('guides/', { params }),
+    getById: (id) => api.get(`guides/${id}/`),
+    getMyProfile: () => api.get('guides/me/profile/'),
+    createMyProfile: (data) => api.post('guides/me/profile/', data),
+    updateMyProfile: (data) => api.put('guides/me/profile/', data),
+};
+
+export const guideBookingService = {
+    list: () => api.get('guide-bookings/'),
+    create: (data) => api.post('guide-bookings/', data),
+    update: (id, data) => api.put(`guide-bookings/${id}/`, data),
+    getById: (id) => api.get(`guide-bookings/${id}/`),
+};
+
 export const adminService = {
     getStats: () => api.get('admin/stats/'),
+    getAllUsers: () => api.get('admin/users/'),
+    deleteUser: (id) => api.delete(`admin/users/${id}/`),
+    getAllProviders: () => api.get('admin/providers/'),
+    // Same data as BookingListView for admin role (backend returns all bookings)
+    getAllBookings: () => api.get('bookings/'),
 };
 
 export default api;
