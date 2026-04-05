@@ -1,7 +1,8 @@
 import { GoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import React, { useState } from 'react';
-import { Mountain, Users, Shield, Building2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Mountain, Users, Shield, Building2, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
+import { notifyAppDataChanged } from '@/lib/dataSync';
 
 const AuthModal = ({ isOpen, onClose, onNavigate }) => {
   const [selectedRole, setSelectedRole] = useState(null);
@@ -31,20 +33,32 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      notifyAppDataChanged();
+
+      toast.success(`Welcome! Logged in as ${selectedRole}.`, {
+        duration: 3000,
+        icon: '✅',
+      });
 
       onClose();
       const userRole = selectedRole;
-      onNavigate(`${userRole}-dashboard`);
+      if (userRole === 'user') {
+        onNavigate('destination-results');
+      } else {
+        onNavigate(`${userRole}-dashboard`);
+      }
     } catch (error) {
       console.error('Login failed:', error);
+      toast.error('Google login failed. Please try again.');
       setError('Google login failed. Please try again.');
     }
   };
 
   const roles = [
     { id: 'user', label: 'User', icon: Users, description: 'Book tours and explore Nepal' },
+    { id: 'guide', label: 'Tour Guide', icon: MapPin, description: 'List your profile and take bookings' },
+    { id: 'provider', label: 'Travel Service Provider', icon: Building2, description: 'Offer tourism services' },
     { id: 'admin', label: 'Admin', icon: Shield, description: 'Manage the platform' },
-    { id: 'provider', label: 'Travel Service Provider', icon: Building2, description: 'Offer tourism services' }
   ];
 
   const handleSubmit = async (isSignup = false) => {
@@ -84,12 +98,26 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      notifyAppDataChanged();
+
+      const message = isSignup 
+        ? `Account created successfully! Welcome as ${selectedRole}.` 
+        : `Logged in successfully as ${selectedRole}!`;
+      toast.success(message, {
+        duration: 3000,
+        icon: '✅',
+      });
 
       onClose();
       const userRole = selectedRole;
-      onNavigate(`${userRole}-dashboard`);
+      if (userRole === 'user') {
+        onNavigate('destination-results');
+      } else {
+        onNavigate(`${userRole}-dashboard`);
+      }
     } catch (error) {
       const errorMsg = error.response?.data?.error || 'Authentication failed';
+      toast.error(errorMsg);
       setError(errorMsg);
     }
   };

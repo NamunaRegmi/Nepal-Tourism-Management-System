@@ -1,13 +1,12 @@
 from django.urls import path
 from .views import (
-    GoogleLoginView, 
-    UserProfileView, 
-    RegisterView, 
+    GoogleLoginView,
+    UserProfileView,
+    RegisterView,
     LoginView,
     ForgotPasswordView,
     ResetPasswordView,
     DestinationListView,
-    DestinationDetailView,
     DestinationDetailView,
     HotelListView,
     ProviderHotelListView,
@@ -18,7 +17,23 @@ from .views import (
     PackageDetailView,
     BookingListView,
     BookingDetailView,
+    KhaltiVerifyView,
+    KhaltiPaymentInitiateView,
+    KhaltiPaymentVerifyView,
+    KhaltiPaymentCallbackView,
+    KhaltiPaymentStatusView,
+    EsewaPaymentInitiateView,
+    EsewaPaymentVerifyView,
+    EsewaPaymentCallbackView,
     AdminDashboardStatsView,
+    AdminUserListView,
+    AdminUserDetailView,
+    AdminProviderListView,
+    TourGuideListView,
+    TourGuideDetailView,
+    TourGuideMeProfileView,
+    GuideBookingListView,
+    GuideBookingDetailView,
 )
 
 urlpatterns = [
@@ -47,10 +62,33 @@ urlpatterns = [
     path('packages/', PackageListView.as_view(), name='package-list'),
     path('packages/<int:pk>/', PackageDetailView.as_view(), name='package-detail'),
     
+    # Tour guides
+    path('guides/', TourGuideListView.as_view(), name='guide-list'),
+    path('guides/me/profile/', TourGuideMeProfileView.as_view(), name='guide-me-profile'),
+    path('guides/<int:pk>/', TourGuideDetailView.as_view(), name='guide-detail'),
+
+    path('guide-bookings/', GuideBookingListView.as_view(), name='guide-booking-list'),
+    path('guide-bookings/<int:pk>/', GuideBookingDetailView.as_view(), name='guide-booking-detail'),
+
     # Booking URLs
     path('bookings/', BookingListView.as_view(), name='booking-list'),
     path('bookings/<int:pk>/', BookingDetailView.as_view(), name='booking-detail'),
+    path('bookings/<int:pk>/verify-khalti/', KhaltiVerifyView.as_view(), name='booking-verify-khalti'),
+    
+    # Khalti Payment URLs
+    path('payment/khalti/initiate/', KhaltiPaymentInitiateView.as_view(), name='khalti-payment-initiate'),
+    path('payment/khalti/verify/', KhaltiPaymentVerifyView.as_view(), name='khalti-payment-verify'),
+    path('payment/khalti/callback/', KhaltiPaymentCallbackView.as_view(), name='khalti-payment-callback'),
+    path('payment/khalti/status/<str:pidx>/', KhaltiPaymentStatusView.as_view(), name='khalti-payment-status'),
+    
+    # eSewa Payment URLs
+    path('payment/esewa/initiate/', EsewaPaymentInitiateView.as_view(), name='esewa-payment-initiate'),
+    path('payment/esewa/verify/', EsewaPaymentVerifyView.as_view(), name='esewa-payment-verify'),
+    path('payment/esewa/callback/', EsewaPaymentCallbackView.as_view(), name='esewa-payment-callback'),
     
     # Admin URLs
     path('admin/stats/', AdminDashboardStatsView.as_view(), name='admin-stats'),
+    path('admin/users/', AdminUserListView.as_view(), name='admin-users'),
+    path('admin/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
+    path('admin/providers/', AdminProviderListView.as_view(), name='admin-providers'),
 ]

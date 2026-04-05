@@ -6,6 +6,7 @@ class User(AbstractUser):
         ('user', 'User'),
         ('admin', 'Admin'),
         ('provider', 'Travel Service Provider'),
+        ('guide', 'Tour Guide'),
     )
     
     role = models.CharField(max_length=20, choices=USER_ROLES, default='user')
@@ -129,6 +130,11 @@ class Booking(models.Model):
         ('cancelled', 'Cancelled'),
         ('completed', 'Completed'),
     )
+    PAYMENT_STATUS_CHOICES = (
+        ('unpaid', 'Unpaid'),
+        ('paid', 'Paid'),
+        ('failed', 'Failed'),
+    )
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookings')
     # Link to either room or package (or both ideally, but let's keep it simple for now)
@@ -139,7 +145,58 @@ class Booking(models.Model):
     end_date = models.DateField(null=True, blank=True)  # For room bookings
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='unpaid')
+    payment_method = models.CharField(max_length=50, default='none')
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
         return f"Booking #{self.id} by {self.user.username}"
+
+
+class TourGuideProfile(models.Model):
+    """Public-facing profile for certified tour guides (linked to user with role=guide)."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='tour_guide_profile')
+    headline = models.CharField(max_length=200, blank=True)
+    bio = models.TextField(blank=True)
+    languages = models.JSONField(default=list, help_text='e.g. ["English", "Nepali"]')
+    years_experience = models.PositiveIntegerField(default=0)
+    daily_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='NPR per day')
+    certifications = models.TextField(blank=True)
+    image = models.URLField(blank=True, null=True)
+    destinations = models.ManyToManyField(Destination, related_name='tour_guides', blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Guide: {self.user.get_full_name() or self.user.username}"
+
+
+class GuideBooking(models.Model):
+    """Customer books a tour guide for a date range."""
+    STATUS_CHOICES = Booking.STATUS_CHOICES
+    PAYMENT_STATUS_CHOICES = Booking.PAYMENT_STATUS_CHOICES
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='guide_bookings')
+    guide_profile = models.ForeignKey(
+        TourGuideProfile, on_delete=models.CASCADE, related_name='bookings'
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    payment_status = models.CharField(
+        max_length=20, choices=PAYMENT_STATUS_CHOICES, default='unpaid'
+    )
+    payment_method = models.CharField(max_length=50, default='none')
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Guide booking #{self.id} — {self.user.username}"

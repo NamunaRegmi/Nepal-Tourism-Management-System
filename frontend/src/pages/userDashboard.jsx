@@ -1,18 +1,34 @@
-import { useState, useEffect } from 'react';
-import { Mountain, Calendar, Heart, Star, Compass, Package, Settings, LogOut, MapPin, Users, DollarSign, Edit2, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Mountain, Calendar, Heart, Star, Compass, Package, Settings, LogOut, MapPin, Users, DollarSign, Edit2, Trash2, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { destinationService, bookingService } from '@/services/api';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { destinationService, bookingService, guideBookingService, authService } from '@/services/api';
+import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
+import { toast } from 'react-hot-toast';
 
-const UserDashboard = ({ onNavigate, onSelectDestination }) => {
+const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) => {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [user, setUser] = useState(null);
   const [destinations, setDestinations] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [guideBookings, setGuideBookings] = useState([]);
   const [wishlist, setWishlist] = useState([]); // Stored as an array of destination IDs in localStorage
   const [activeView, setActiveView] = useState('dashboard'); // dashboard, bookings, wishlist, profile, browse
+  const [profileForm, setProfileForm] = useState({
+    username: '',
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    profile_picture: '',
+  });
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+  const [photoFileName, setPhotoFileName] = useState('');
   const [loading, setLoading] = useState(true);
 
   const getDestinationMeta = (dest) => {
@@ -106,18 +122,29 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
     return base;
   };
 
-  useEffect(() => {
-    // Get user from local storage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        try {
+          const profileRes = await authService.getProfile();
+          const profileData = profileRes.data;
+          setUser(profileData);
+          setProfileForm({
+            username: profileData.username || '',
+            first_name: profileData.first_name || '',
+            last_name: profileData.last_name || '',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+            profile_picture: profileData.profile_picture || '',
+          });
+          setProfilePhotoUrl(profileData.profile_picture || '');
+          localStorage.setItem('user', JSON.stringify(profileData));
+        } catch (err) {
+          console.error('Failed to load user profile', err);
+        }
+      }
+
       // Fetch destinations (public)
       try {
         const destRes = await destinationService.getAll();
@@ -149,7 +176,6 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
       }
 
       // Fetch bookings (authenticated)
-      const token = localStorage.getItem('access_token');
       if (token) {
         try {
           const bookingRes = await bookingService.getMyBookings();
@@ -157,13 +183,74 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
         } catch (err) {
           console.error("Failed to load bookings", err);
         }
+        try {
+          const gbRes = await guideBookingService.list();
+          setGuideBookings(gbRes.data || []);
+        } catch (err) {
+          console.error("Failed to load guide bookings", err);
+          setGuideBookings([]);
+        }
       }
     } catch (err) {
       console.error("Dashboard error", err);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const parsed = JSON.parse(storedUser);
+      setUser(parsed);
+      setProfileForm((prev) => ({
+        ...prev,
+        username: parsed.username || prev.username,
+        first_name: parsed.first_name || prev.first_name,
+        last_name: parsed.last_name || prev.last_name,
+        email: parsed.email || prev.email,
+        phone: parsed.phone || prev.phone,
+        profile_picture: parsed.profile_picture || prev.profile_picture,
+      }));
+      setProfilePhotoUrl(parsed.profile_picture || '');
+    }
+    if (view) {
+      setActiveView(view);
+    }
+    fetchDashboardData();
+  }, [fetchDashboardData, view]);
+
+  const handleProfilePhotoUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result;
+      if (typeof dataUrl === 'string') {
+        setProfileForm((prev) => ({ ...prev, profile_picture: dataUrl }));
+        setProfilePhotoUrl('');
+        setPhotoFileName(file.name);
+      }
+    };
+    reader.readAsDataURL(file);
   };
+
+  const handleSaveProfile = async () => {
+    try {
+      const response = await authService.updateProfile(profileForm);
+      setUser(response.data);
+      localStorage.setItem('user', JSON.stringify(response.data));
+      toast.success('Your profile has been updated.');
+    } catch (err) {
+      console.error('Failed to save profile', err);
+      toast.error('Unable to update profile right now.');
+    }
+  };
+
+  useAppDataSync(fetchDashboardData);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -194,8 +281,19 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
     try {
       await bookingService.updateStatus(bookingId, 'cancelled');
       setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' } : b)));
+      notifyAppDataChanged();
     } catch (err) {
       console.error('Failed to cancel booking', err);
+    }
+  };
+
+  const handleCancelGuideBooking = async (id) => {
+    try {
+      await guideBookingService.update(id, { status: 'cancelled' });
+      setGuideBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)));
+      notifyAppDataChanged();
+    } catch (err) {
+      console.error('Failed to cancel guide booking', err);
     }
   };
 
@@ -227,7 +325,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
               <p className="mt-2 text-base text-slate-600">
                 {activeView === 'dashboard' && 'Browse and explore Nepal’s most popular travel destinations.'}
                 {activeView === 'browse' && 'Tap a destination to view details and learn more.'}
-                {activeView === 'bookings' && 'Review your past and upcoming bookings. You can cancel pending bookings here.'}
+                {activeView === 'bookings' && 'Hotel, package, and tour guide requests. Cancel pending items when needed.'}
                 {activeView === 'wishlist' && 'View, remove, or revisit tours you have saved for later.'}
                 {activeView === 'profile' && 'Update your profile information and manage your account.'}
               </p>
@@ -264,6 +362,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
                 {[
                   { title: "My Bookings", desc: "View & manage bookings", icon: Package, action: () => setActiveView('bookings') },
                   { title: "Browse Tours", desc: "Discover destinations", icon: Compass, action: () => onNavigate('destination-results') },
+                  { title: "Tour guides", desc: "Find a local guide", icon: UserCircle, action: () => onNavigate('guides') },
                   { title: "Wishlist", desc: "Your saved tours", icon: Heart, action: () => setActiveView('wishlist') },
                   { title: "Profile Settings", desc: "Update your info", icon: Settings, action: () => setActiveView('profile') },
                 ].map((item, i) => (
@@ -364,10 +463,13 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
               )}
             </>
           ) : activeView === 'bookings' ? (
-            <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
+            <div className="space-y-10">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-4">Stays &amp; packages</h3>
+              <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
               {bookings.length === 0 ? (
                 <div className="rounded-2xl bg-white p-8 shadow">
-                  <p className="text-slate-600">No bookings found yet. Book a tour to see it here.</p>
+                  <p className="text-slate-600">No hotel or package bookings yet.</p>
                 </div>
               ) : (
                 bookings.map((booking) => (
@@ -422,6 +524,46 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
                   </Card>
                 ))
               )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-4">Tour guide requests</h3>
+              <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
+                {guideBookings.length === 0 ? (
+                  <div className="rounded-2xl bg-white p-8 shadow border border-slate-100">
+                    <p className="text-slate-600">No guide requests yet. Browse <button type="button" className="text-blue-600 underline" onClick={() => onNavigate('guides')}>tour guides</button> to book someone.</p>
+                  </div>
+                ) : (
+                  guideBookings.map((gb) => (
+                    <Card key={gb.id} className="border shadow-sm border-emerald-100">
+                      <CardHeader className="flex justify-between items-start py-4">
+                        <div>
+                          <CardTitle className="text-lg">Guide: {gb.guide_display_name}</CardTitle>
+                          <CardDescription>Tour guide booking</CardDescription>
+                        </div>
+                        <Badge variant={gb.status === 'confirmed' ? 'default' : gb.status === 'pending' ? 'secondary' : 'destructive'}>
+                          {gb.status}
+                        </Badge>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-2 text-sm text-slate-600">
+                          <div><strong>Dates:</strong> {gb.start_date} → {gb.end_date}</div>
+                          <div><strong>Total:</strong> Rs. {Number(gb.total_price || 0).toLocaleString('en-IN')}</div>
+                        </div>
+                      </CardContent>
+                      <div className="p-4 flex gap-2">
+                        {gb.status !== 'cancelled' && gb.status !== 'completed' && (
+                          <Button variant="outline" className="w-full" onClick={() => handleCancelGuideBooking(gb.id)}>
+                            Cancel request
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
             </div>
           ) : activeView === 'wishlist' ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -462,52 +604,275 @@ const UserDashboard = ({ onNavigate, onSelectDestination }) => {
               )}
             </div>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border shadow-sm">
-                <CardHeader>
-                  <CardTitle>Your Profile</CardTitle>
-                  <CardDescription>Manage your account and personal information.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4">
-                    <div>
-                      <p className="text-sm text-slate-600">Name</p>
-                      <p className="text-base font-semibold text-slate-900">{user?.first_name} {user?.last_name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-600">Email</p>
-                      <p className="text-base font-semibold text-slate-900">{user?.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-600">Role</p>
-                      <p className="text-base font-semibold text-slate-900">{user?.role}</p>
+            <div className="space-y-6">
+              <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+                <Card className="border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="bg-slate-50 px-6 py-7">
+                    <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex items-start gap-5">
+                        <Avatar className="h-24 w-24 ring-2 ring-slate-200">
+                          {profileForm.profile_picture ? (
+                            <AvatarImage src={profileForm.profile_picture} alt="Profile" />
+                          ) : (
+                            <AvatarFallback>{(user?.first_name || user?.username || 'U').charAt(0).toUpperCase()}</AvatarFallback>
+                          )}
+                        </Avatar>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h1 className="text-3xl font-semibold text-slate-900">{user?.first_name ? `${user.first_name} ${user.last_name}` : user?.username}</h1>
+                            <Badge variant="secondary" className="capitalize">Active</Badge>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-600">{user?.role === 'guide' ? 'Tour Guide' : user?.role === 'provider' ? 'Service Provider' : 'Traveler'}</p>
+                          <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
+                            <span>{user?.email}</span>
+                            <span>{user?.phone || 'No phone number yet'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {[{
+                          label: 'Bookings',
+                          value: bookings.length,
+                        }, {
+                          label: 'Guide requests',
+                          value: guideBookings.length,
+                        }, {
+                          label: 'Saved',
+                          value: wishlist.length,
+                        }, {
+                          label: 'Active',
+                          value: bookings.filter(b => b.status === 'confirmed' || b.status === 'pending').length,
+                        }].map((metric) => (
+                          <div key={metric.label} className="rounded-3xl bg-white p-4 shadow-sm">
+                            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{metric.label}</p>
+                            <p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </CardContent>
-                <div className="p-4">
-                  <Button className="w-full" variant="outline" onClick={handleLogout}>
-                    Logout
-                  </Button>
-                </div>
-              </Card>
 
-              <Card className="border shadow-sm">
-                <CardHeader>
-                  <CardTitle>Quick actions</CardTitle>
-                  <CardDescription>Useful links for your account.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <Button size="sm" onClick={() => setActiveView('bookings')}>
-                    View My Bookings
-                  </Button>
-                  <Button size="sm" onClick={() => setActiveView('wishlist')}>
-                    View Saved Tours
-                  </Button>
-                  <Button size="sm" onClick={() => onNavigate('destination-results')}>
-                    Browse Tours
-                  </Button>
-                </CardContent>
-              </Card>
+                  <CardContent className="px-6 py-8">
+                    <Tabs defaultValue="overview" className="space-y-6">
+                      <TabsList className="grid grid-cols-4 gap-2">
+                        <TabsTrigger value="overview">Overview</TabsTrigger>
+                        <TabsTrigger value="bookings">Bookings</TabsTrigger>
+                        <TabsTrigger value="activity">Activity</TabsTrigger>
+                        <TabsTrigger value="saved">Saved</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="overview">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="rounded-3xl bg-slate-50 p-5">
+                            <p className="text-sm text-slate-500">Account</p>
+                            <p className="mt-3 text-base font-semibold text-slate-900">{user?.username}</p>
+                          </div>
+                          <div className="rounded-3xl bg-slate-50 p-5">
+                            <p className="text-sm text-slate-500">Role</p>
+                            <p className="mt-3 text-base font-semibold text-slate-900 capitalize">{user?.role}</p>
+                          </div>
+                          <div className="rounded-3xl bg-slate-50 p-5">
+                            <p className="text-sm text-slate-500">Email</p>
+                            <p className="mt-3 text-base font-semibold text-slate-900">{user?.email}</p>
+                          </div>
+                          <div className="rounded-3xl bg-slate-50 p-5">
+                            <p className="text-sm text-slate-500">Phone</p>
+                            <p className="mt-3 text-base font-semibold text-slate-900">{user?.phone || 'Not set'}</p>
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="bookings">
+                        {bookings.length === 0 ? (
+                          <div className="rounded-3xl bg-slate-50 p-6 text-slate-600">You have no hotel or package bookings yet.</div>
+                        ) : (
+                          <div className="grid gap-4">
+                            {bookings.map((booking) => (
+                              <div key={booking.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <div className="flex items-center justify-between gap-4">
+                                  <div>
+                                    <p className="text-sm text-slate-500">{booking.package?.name ? 'Package booking' : 'Room booking'}</p>
+                                    <p className="mt-1 text-lg font-semibold text-slate-900">{booking.package?.name || booking.room?.hotel?.name || 'Booking'}</p>
+                                  </div>
+                                  <Badge variant={booking.status === 'confirmed' ? 'success' : booking.status === 'pending' ? 'secondary' : 'destructive'}>
+                                    {booking.status}
+                                  </Badge>
+                                </div>
+                                <div className="mt-4 grid gap-2 sm:grid-cols-2 text-sm text-slate-600">
+                                  <div><strong>Start:</strong> {booking.start_date}</div>
+                                  {booking.end_date && <div><strong>End:</strong> {booking.end_date}</div>}
+                                  <div><strong>Total:</strong> {booking.total_price}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </TabsContent>
+
+                      <TabsContent value="activity">
+                        <div className="space-y-4">
+                          {guideBookings.length === 0 && bookings.length === 0 ? (
+                            <div className="rounded-3xl bg-slate-50 p-6 text-slate-600">No recent activity to show yet.</div>
+                          ) : (
+                            <div className="space-y-4">
+                              {bookings.slice(0, 3).map((booking) => (
+                                <div key={`act-booking-${booking.id}`} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                  <p className="text-sm text-slate-500">Booking activity</p>
+                                  <p className="mt-1 text-base font-semibold text-slate-900">{booking.package?.name || booking.room?.hotel?.name || 'Booking'}</p>
+                                  <p className="mt-2 text-sm text-slate-600">Status: {booking.status} · {booking.start_date}</p>
+                                </div>
+                              ))}
+                              {guideBookings.slice(0, 3).map((gb) => (
+                                <div key={`act-guide-${gb.id}`} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                  <p className="text-sm text-slate-500">Guide request</p>
+                                  <p className="mt-1 text-base font-semibold text-slate-900">{gb.guide_display_name}</p>
+                                  <p className="mt-2 text-sm text-slate-600">Status: {gb.status} · {gb.start_date}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="saved">
+                        <div className="grid gap-4">
+                          <div className="rounded-3xl bg-slate-50 p-6">
+                            <p className="text-sm text-slate-500">Saved destination count</p>
+                            <p className="mt-3 text-2xl font-semibold text-slate-900">{wishlist.length}</p>
+                          </div>
+                          {getWishlistDestinations().length === 0 ? (
+                            <div className="rounded-3xl bg-slate-50 p-6 text-slate-600">No saved tours yet. Save your favorites to see them here.</div>
+                          ) : (
+                            <div className="space-y-3">
+                              {getWishlistDestinations().map((dest) => (
+                                <div key={dest.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                                  <p className="font-semibold text-slate-900">{dest.name}</p>
+                                  <p className="text-sm text-slate-500">{dest.province}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
+
+                <Card className="border border-slate-200 shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Manage account</CardTitle>
+                    <CardDescription>Update profile details and preferences.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="username">Username</Label>
+                        <Input
+                          id="username"
+                          value={profileForm.username}
+                          onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="first_name">First name</Label>
+                          <Input
+                            id="first_name"
+                            value={profileForm.first_name}
+                            onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="last_name">Last name</Label>
+                          <Input
+                            id="last_name"
+                            value={profileForm.last_name}
+                            onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={profileForm.email}
+                          onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="phone">Phone</Label>
+                        <Input
+                          id="phone"
+                          value={profileForm.phone}
+                          onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="profile_photo">Profile photo</Label>
+                        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                          <div className="grid gap-4 lg:grid-cols-[auto_1fr] lg:items-center">
+                            <div className="h-24 w-24 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
+                              {profileForm.profile_picture ? (
+                                <img
+                                  src={profileForm.profile_picture}
+                                  alt="Profile preview"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                                  Preview
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="grid gap-3">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <label
+                                  htmlFor="profile_photo"
+                                  className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+                                >
+                                  Choose File
+                                </label>
+                                <span className="text-sm text-slate-500">{photoFileName || 'No file chosen'}</span>
+                              </div>
+                              <input
+                                id="profile_photo"
+                                type="file"
+                                accept="image/*"
+                                onChange={handleProfilePhotoUpload}
+                                className="sr-only"
+                              />
+                              <p className="text-sm leading-6 text-slate-500">Upload a square photo or paste an image URL below to update your profile picture.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="profile_picture">Profile image URL</Label>
+                        <Input
+                          id="profile_picture"
+                          value={profilePhotoUrl}
+                          onChange={(e) => {
+                            setProfilePhotoUrl(e.target.value);
+                            setProfileForm({ ...profileForm, profile_picture: e.target.value });
+                          }}
+                          placeholder="https://example.com/photo.jpg"
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                  <div className="p-4 grid gap-3">
+                    <Button onClick={handleSaveProfile} className="w-full">
+                      Save changes
+                    </Button>
+                    <Button variant="outline" className="w-full" onClick={handleLogout}>
+                      Logout
+                    </Button>
+                  </div>
+                </Card>
+              </div>
             </div>
           )}
         </section>

@@ -13,11 +13,16 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.utils.encoding import force_bytes, force_str
 from django.db import models
-from .models import User, Destination, Hotel, Room, Booking, Package
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from .models import User, Destination, Hotel, Room, Booking, Package, TourGuideProfile, GuideBooking
 from .serializers import (
     UserSerializer, DestinationSerializer, HotelSerializer,
-    RoomSerializer, BookingSerializer, PackageSerializer
+    RoomSerializer, BookingSerializer, PackageSerializer,
+    TourGuideProfileSerializer, GuideBookingSerializer,
 )
+from .khalti_integration import KhaltiPaymentGateway
+from .esewa_integration import EsewaPaymentGateway
 
 
 class GoogleLoginView(APIView):
@@ -260,6 +265,16 @@ class UserProfileView(APIView):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
+    def put(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request):
+        return self.put(request)
+
 
 # Destination Views
 class DestinationListView(APIView):
@@ -394,52 +409,57 @@ class HotelListView(APIView):
         
         serializer = HotelSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(destination=destination)
+            serializer.save(destination=destination, provider=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProviderHotelListView(APIView):
-    """List hotels owned by the authenticated provider"""
+    """List or create hotels owned by the authenticated provider."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         if request.user.role != 'provider':
             return Response(
-                {'error': 'Only service providers can access this endpoint'}, 
+                {'error': 'Only service providers can access this endpoint'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
+        # Only return properties belonging to the authenticated provider
+        hotels = (
+            Hotel.objects.filter(provider=request.user, is_active=True)
+            .select_related('destination', 'provider')
+            .order_by('destination__name', 'name')
+        )
+        serializer = HotelSerializer(hotels, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if request.user.role != 'provider':
+            return Response(
+                {'error': 'Only service providers can create hotels here'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        payload = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        dest_raw = payload.pop('destination_id', None) or payload.pop('destination', None)
+        if dest_raw is None:
+            return Response(
+                {'error': 'destination_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         try:
-            hotels = Hotel.objects.filter(provider=request.user, is_active=True)
-            
-            if not hotels.exists():
-                if not Hotel.objects.exists():
-                    provider_user = request.user
-                    destinations = Destination.objects.all()
-                    if not destinations.exists():
-                        des1 = Destination.objects.create(name="Kathmandu", province="Bagmati", description="Nepal's capital", image="https://media.greenvalleynepaltreks.com/uploads/fullbanner/pashupatinath-temple-kathmandu.webp", best_time_to_visit="Sep-Dec")
-                        des2 = Destination.objects.create(name="Pokhara", province="Gandaki", description="Beautiful lakeside city", image="https://lp-cms-production.imgix.net/2019-06/53693064.jpg", best_time_to_visit="Sep-Nov")
-                        des3 = Destination.objects.create(name="Chitwan", province="Bagmati", description="Wildlife paradise", image="https://wallpaperbat.com/img/33765-shafir-image-night-kathmandu.jpg", best_time_to_visit="Oct-Mar")
-                        destinations = [des1, des2, des3]
+            destination = Destination.objects.get(pk=int(dest_raw))
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid destination_id'}, status=status.HTTP_400_BAD_REQUEST)
+        except Destination.DoesNotExist:
+            return Response({'error': 'Destination not found'}, status=status.HTTP_404_NOT_FOUND)
 
-                    for dest in destinations:
-                        Hotel.objects.create(name=f"{dest.name} Paradise Resort", destination=dest, provider=provider_user, description=f"A luxurious stay with beautiful views of {dest.name}.", price_per_night=8500, rating=4.8, image="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800")
-                        Hotel.objects.create(name=f"{dest.name} Boutique Hotel", destination=dest, provider=provider_user, description=f"Cozy and comfortable boutique accommodation in {dest.name}.", price_per_night=4500, rating=4.3, image="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800")
-                        Hotel.objects.create(name=f"{dest.name} Backpacker Hostel", destination=dest, provider=provider_user, description=f"Affordable and social hostel in the heart of {dest.name}.", price_per_night=1500, rating=4.0, image="https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800")
-                
-                else:
-                    Hotel.objects.all().update(provider=request.user)
-
-                hotels = Hotel.objects.filter(provider=request.user, is_active=True)
-            
-            serializer = HotelSerializer(hotels, many=True)
-            return Response(serializer.data)
-        except Exception as e:
-            import traceback
-            with open("api_debug.txt", "w") as f:
-                f.write(traceback.format_exc())
-            return Response({"error_detail": str(e)}, status=500)
+        serializer = HotelSerializer(data=payload)
+        if serializer.is_valid():
+            serializer.save(destination=destination, provider=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class HotelDetailView(APIView):
@@ -472,6 +492,11 @@ class HotelDetailView(APIView):
         
         try:
             hotel = Hotel.objects.get(pk=pk)
+            if request.user.role == 'provider' and hotel.provider_id != request.user.id:
+                return Response(
+                    {'error': 'You can only update your own hotels'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
             serializer = HotelSerializer(hotel, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
@@ -489,26 +514,31 @@ class HotelDetailView(APIView):
                 {'error': 'Authentication required'}, 
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
-        if request.user.role != 'admin':
-            return Response(
-                {'error': 'Only admins can delete hotels'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
+
         try:
             hotel = Hotel.objects.get(pk=pk)
-            hotel.is_active = False  # Soft delete
-            hotel.save()
-            return Response(
-                {'message': 'Hotel deleted successfully'}, 
-                status=status.HTTP_204_NO_CONTENT
-            )
         except Hotel.DoesNotExist:
             return Response(
                 {'error': 'Hotel not found'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
+
+        if request.user.role == 'admin':
+            pass
+        elif request.user.role == 'provider' and hotel.provider_id == request.user.id:
+            pass
+        else:
+            return Response(
+                {'error': 'Only admins or the owning provider can delete this hotel'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        hotel.is_active = False
+        hotel.save()
+        return Response(
+            {'message': 'Hotel deleted successfully'},
+            status=status.HTTP_204_NO_CONTENT
+        )
 
 
 # Room Views
@@ -659,17 +689,20 @@ class BookingListView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
+        base = Booking.objects.select_related(
+            'user', 'room', 'room__hotel', 'room__hotel__provider', 'package', 'package__provider'
+        )
         if request.user.role == 'user':
-            bookings = Booking.objects.filter(user=request.user)
+            bookings = base.filter(user=request.user)
         elif request.user.role == 'provider':
             # Provider sees bookings for their hotels or packages
-            bookings = Booking.objects.filter(
-                models.Q(room__hotel__provider=request.user) | 
+            bookings = base.filter(
+                models.Q(room__hotel__provider=request.user) |
                 models.Q(package__provider=request.user)
             ).distinct()
-        else: # Admin
-            bookings = Booking.objects.all()
-            
+        else:  # Admin
+            bookings = base.all()
+
         serializer = BookingSerializer(bookings, many=True)
         return Response(serializer.data)
         
@@ -733,13 +766,587 @@ class AdminDashboardStatsView(APIView):
             
         total_users = User.objects.filter(role='user').count()
         total_providers = User.objects.filter(role='provider').count()
+        total_guides = User.objects.filter(role='guide').count()
         total_bookings = Booking.objects.count()
-        
+        total_guide_bookings = GuideBooking.objects.count()
+
         revenue = Booking.objects.filter(status='confirmed').aggregate(total=models.Sum('total_price'))['total'] or 0
-        
+        guide_revenue = GuideBooking.objects.filter(status='confirmed').aggregate(
+            total=models.Sum('total_price')
+        )['total'] or 0
+
         return Response({
             'total_users': total_users,
             'total_providers': total_providers,
+            'total_guides': total_guides,
             'total_bookings': total_bookings,
-            'revenue': revenue
+            'total_guide_bookings': total_guide_bookings,
+            'revenue': revenue,
+            'guide_revenue': guide_revenue,
         })
+
+
+class AdminUserListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        users = User.objects.filter(role='user').order_by('-date_joined')
+        return Response(UserSerializer(users, many=True).data)
+
+
+class AdminUserDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        if pk == request.user.id:
+            return Response({'error': 'Cannot delete your own account this way'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target = User.objects.get(pk=pk, role='user')
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        target.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminProviderListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        providers = User.objects.filter(role='provider').order_by('-date_joined')
+        return Response(UserSerializer(providers, many=True).data)
+
+
+class TourGuideListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        qs = TourGuideProfile.objects.filter(is_active=True).select_related('user').prefetch_related('destinations')
+        dest_id = request.query_params.get('destination')
+        if dest_id:
+            qs = qs.filter(destinations__id=dest_id).distinct()
+        serializer = TourGuideProfileSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+class TourGuideDetailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        try:
+            profile = TourGuideProfile.objects.select_related('user').prefetch_related('destinations').get(
+                pk=pk, is_active=True
+            )
+        except TourGuideProfile.DoesNotExist:
+            return Response({'error': 'Guide not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(TourGuideProfileSerializer(profile).data)
+
+
+class TourGuideMeProfileView(APIView):
+    """Current guide: get / create / update own public profile."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != 'guide':
+            return Response({'error': 'Only tour guides can access this'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            profile = request.user.tour_guide_profile
+        except TourGuideProfile.DoesNotExist:
+            return Response({'detail': 'No profile yet'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(TourGuideProfileSerializer(profile).data)
+
+    def post(self, request):
+        if request.user.role != 'guide':
+            return Response({'error': 'Only tour guides can create a profile'}, status=status.HTTP_403_FORBIDDEN)
+        if TourGuideProfile.objects.filter(user=request.user).exists():
+            return Response({'error': 'Profile already exists. Use PUT to update.'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = TourGuideProfileSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        if request.user.role != 'guide':
+            return Response({'error': 'Only tour guides can update a profile'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            profile = request.user.tour_guide_profile
+        except TourGuideProfile.DoesNotExist:
+            return Response({'error': 'Create your profile with POST first.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = TourGuideProfileSerializer(profile, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GuideBookingListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role == 'user':
+            qs = GuideBooking.objects.filter(user=user)
+        elif user.role == 'guide':
+            qs = GuideBooking.objects.filter(guide_profile__user=user)
+        elif user.role == 'admin':
+            qs = GuideBooking.objects.all()
+        else:
+            qs = GuideBooking.objects.none()
+        qs = qs.select_related('user', 'guide_profile', 'guide_profile__user')
+        return Response(GuideBookingSerializer(qs, many=True).data)
+
+    def post(self, request):
+        if request.user.role != 'user':
+            return Response({'error': 'Only travelers can request a guide booking'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = GuideBookingSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GuideBookingDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
+        try:
+            booking = GuideBooking.objects.select_related('guide_profile', 'guide_profile__user', 'user').get(pk=pk)
+        except GuideBooking.DoesNotExist:
+            return None
+        if user.role == 'admin':
+            return booking
+        if booking.user_id == user.id:
+            return booking
+        if user.role == 'guide' and booking.guide_profile.user_id == user.id:
+            return booking
+        return None
+
+    def get(self, request, pk):
+        booking = self.get_object(pk, request.user)
+        if not booking:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(GuideBookingSerializer(booking).data)
+
+    def put(self, request, pk):
+        booking = self.get_object(pk, request.user)
+        if not booking:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        status_update = request.data.get('status')
+        if status_update:
+            if request.user.role == 'user' and status_update not in ['cancelled']:
+                return Response({'error': 'Users can only cancel'}, status=status.HTTP_403_FORBIDDEN)
+            if request.user.role == 'guide' and status_update not in ['confirmed', 'cancelled', 'completed']:
+                return Response({'error': 'Invalid status for guide'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = GuideBookingSerializer(booking, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class KhaltiVerifyView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        token = request.data.get('token')
+        amount = request.data.get('amount')
+        
+        if not token or not amount:
+            return Response({'error': 'Token and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            booking = Booking.objects.get(pk=pk, user=request.user)
+        except Booking.DoesNotExist:
+            return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        # Verify with Khalti
+        import requests as httprequests
+        url = "https://khalti.com/api/v2/payment/verify/"
+        payload = {
+            "token": token,
+            "amount": amount
+        }
+        headers = {
+            "Authorization": "Key test_secret_key_f59e8b7d18b4499ca40f68195a846e9b"
+        }
+        
+        try:
+            response = httprequests.post(url, payload, headers=headers)
+            result = response.json()
+            
+            if response.status_code == 200 and result.get('idx'):
+                # Payment successful
+                booking.payment_status = 'paid'
+                booking.payment_method = 'khalti'
+                booking.status = 'confirmed'
+                booking.save()
+                return Response({'message': 'Payment verified successfully'})
+            else:
+                booking.payment_status = 'failed'
+                booking.status = 'cancelled'
+                booking.save()
+                return Response({'error': 'Payment verification failed', 'details': result}, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class KhaltiPaymentInitiateView(APIView):
+    """
+    Initiate Khalti payment for a booking
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            booking_id = request.data.get('booking_id')
+            return_url = request.data.get('return_url', 'http://localhost:3000/payment/verify')
+            
+            if not booking_id:
+                return Response({'error': 'Booking ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                booking = Booking.objects.get(id=booking_id, user=request.user)
+            except Booking.DoesNotExist:
+                return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            if booking.payment_status == 'paid':
+                return Response({'error': 'Payment already completed for this booking'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Initialize Khalti payment
+            khalti = KhaltiPaymentGateway()
+            payment_response = khalti.initiate_payment(booking, return_url)
+            
+            if payment_response.get('error'):
+                return Response(payment_response, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update booking with payment initiation details
+            booking.payment_method = 'khalti'
+            booking.save()
+            
+            # Return Khalti response directly (frontend expects payment_url and pidx)
+            return Response(payment_response)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class KhaltiPaymentVerifyView(APIView):
+    """
+    Verify Khalti payment after completion
+    Following Khalti documentation for payment verification
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            pidx = request.data.get('pidx')
+            
+            if not pidx:
+                return Response({'error': 'Payment identifier (pidx) is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Find booking associated with this pidx
+            # We need to extract booking_id from purchase_order_id format "BOOK-{id}"
+            # For now, we'll get all bookings and find the one with matching pidx in metadata
+            # In production, you should store pidx with the booking during initiation
+            
+            # Verify payment with Khalti using lookup API
+            khalti = KhaltiPaymentGateway()
+            verification_response = khalti.verify_payment(pidx)
+            
+            if verification_response.get('error'):
+                return Response(verification_response, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if verification was successful
+            if verification_response.get('status') == 'Completed':
+                # Extract booking_id from purchase_order_id if available
+                # For now, we'll assume the booking is found and update it
+                # In production, you should have a way to map pidx to booking
+                
+                return Response({
+                    'success': True,
+                    'message': 'Payment verified successfully',
+                    'payment_details': verification_response
+                })
+            else:
+                return Response({
+                    'error': 'Payment not completed',
+                    'status': verification_response.get('status'),
+                    'details': verification_response
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class KhaltiPaymentCallbackView(APIView):
+    """
+    Handle Khalti payment callback (GET request)
+    Following Khalti documentation for callback handling
+    """
+    permission_classes = [AllowAny]  # Callback from Khalti doesn't require authentication
+    
+    def get(self, request):
+        try:
+            pidx = request.GET.get('pidx')
+            status = request.GET.get('status')
+            transaction_id = request.GET.get('transaction_id')
+            amount = request.GET.get('amount')
+            purchase_order_id = request.GET.get('purchase_order_id')
+            
+            if not pidx:
+                return Response({'error': 'Payment identifier (pidx) is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Log the callback for debugging
+            print(f"Khalti Callback: pidx={pidx}, status={status}, transaction_id={transaction_id}")
+            
+            if status == 'Completed':
+                # Payment was successful, verify with lookup API
+                khalti = KhaltiPaymentGateway()
+                verification_response = khalti.verify_payment(pidx)
+                
+                if not verification_response.get('error') and verification_response.get('status') == 'Completed':
+                    # Extract booking_id from purchase_order_id
+                    booking_id = None
+                    if purchase_order_id and purchase_order_id.startswith('BOOK-'):
+                        try:
+                            booking_id = int(purchase_order_id.split('-')[1])
+                        except (ValueError, IndexError):
+                            pass
+                    
+                    if booking_id:
+                        try:
+                            booking = Booking.objects.get(id=booking_id)
+                            booking.payment_status = 'paid'
+                            booking.payment_method = 'khalti'
+                            booking.status = 'confirmed'
+                            booking.save()
+                            
+                            return Response({
+                                'success': True,
+                                'message': 'Payment verified and booking confirmed',
+                                'booking_id': booking.id
+                            })
+                        except Booking.DoesNotExist:
+                            return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+                    
+                    return Response({
+                        'success': True,
+                        'message': 'Payment verified',
+                        'details': verification_response
+                    })
+                else:
+                    return Response({'error': 'Payment verification failed'}, status=status.HTTP_400_BAD_REQUEST)
+            elif status == 'User canceled':
+                return Response({'error': 'Payment was cancelled by user'}, status=status.HTTP_400_BAD_REQUEST)
+            elif status == 'Pending':
+                return Response({'error': 'Payment is pending'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({'error': f'Payment failed with status: {status}'}, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class KhaltiPaymentStatusView(APIView):
+    """
+    Check payment status using pidx
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, pidx):
+        try:
+            khalti = KhaltiPaymentGateway()
+            status_response = khalti.get_payment_status(pidx)
+            
+            if status_response.get('error'):
+                return Response(status_response, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response(status_response)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# eSewa Payment Views
+@method_decorator(csrf_exempt, name='dispatch')
+class EsewaPaymentInitiateView(APIView):
+    """
+    Initiate eSewa payment for a booking
+    Returns payment form data for frontend to submit
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            booking_id = request.data.get('booking_id')
+            success_url = request.data.get('success_url', 'http://localhost:3000/payment/esewa/success')
+            failure_url = request.data.get('failure_url', 'http://localhost:3000/payment/esewa/failure')
+            
+            if not booking_id:
+                return Response({'error': 'Booking ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                booking = Booking.objects.get(id=booking_id, user=request.user)
+            except Booking.DoesNotExist:
+                return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            if booking.payment_status == 'paid':
+                return Response({'error': 'Payment already completed for this booking'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Initialize eSewa payment
+            esewa = EsewaPaymentGateway()
+            payment_data = esewa.initiate_payment(booking, success_url, failure_url)
+            
+            if payment_data.get('error'):
+                return Response(payment_data, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update booking with payment initiation details
+            booking.payment_method = 'esewa'
+            booking.save()
+            
+            return Response(payment_data)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EsewaPaymentVerifyView(APIView):
+    """
+    Verify eSewa payment after completion
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            transaction_uuid = request.data.get('transaction_uuid')
+            total_amount = request.data.get('total_amount')
+            product_code = request.data.get('product_code')
+            
+            if not transaction_uuid or not total_amount:
+                return Response({
+                    'error': 'transaction_uuid and total_amount are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Verify payment with eSewa
+            esewa = EsewaPaymentGateway()
+            verification_response = esewa.verify_payment(transaction_uuid, total_amount, product_code)
+            
+            if verification_response.get('error'):
+                return Response(verification_response, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Extract booking_id from transaction_uuid (format: BOOK-{id}-{timestamp})
+            booking_id = None
+            if transaction_uuid and transaction_uuid.startswith('BOOK-'):
+                try:
+                    parts = transaction_uuid.split('-')
+                    if len(parts) >= 2:
+                        booking_id = int(parts[1])
+                except (ValueError, IndexError):
+                    pass
+            
+            if booking_id:
+                try:
+                    booking = Booking.objects.get(id=booking_id, user=request.user)
+                    booking.payment_status = 'paid'
+                    booking.payment_method = 'esewa'
+                    booking.status = 'confirmed'
+                    booking.save()
+                    
+                    return Response({
+                        'success': True,
+                        'message': 'Payment verified and booking confirmed',
+                        'booking_id': booking.id,
+                        'payment_details': verification_response
+                    })
+                except Booking.DoesNotExist:
+                    return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            return Response({
+                'success': True,
+                'message': 'Payment verified',
+                'details': verification_response
+            })
+                
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EsewaPaymentCallbackView(APIView):
+    """
+    Handle eSewa payment callback (GET request from eSewa)
+    """
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        try:
+            # eSewa sends these parameters on success
+            transaction_uuid = request.GET.get('transaction_uuid')
+            transaction_code = request.GET.get('transaction_code')
+            total_amount = request.GET.get('total_amount')
+            product_code = request.GET.get('product_code')
+            status_param = request.GET.get('status')
+            
+            print(f"eSewa Callback: transaction_uuid={transaction_uuid}, status={status_param}")
+            
+            if not transaction_uuid or not total_amount:
+                return Response({
+                    'error': 'Invalid callback parameters'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Verify payment with eSewa
+            esewa = EsewaPaymentGateway()
+            verification_response = esewa.verify_payment(transaction_uuid, total_amount, product_code)
+            
+            if verification_response.get('success'):
+                # Extract booking_id from transaction_uuid
+                booking_id = None
+                if transaction_uuid.startswith('BOOK-'):
+                    try:
+                        parts = transaction_uuid.split('-')
+                        if len(parts) >= 2:
+                            booking_id = int(parts[1])
+                    except (ValueError, IndexError):
+                        pass
+                
+                if booking_id:
+                    try:
+                        booking = Booking.objects.get(id=booking_id)
+                        booking.payment_status = 'paid'
+                        booking.payment_method = 'esewa'
+                        booking.status = 'confirmed'
+                        booking.save()
+                        
+                        return Response({
+                            'success': True,
+                            'message': 'Payment verified and booking confirmed',
+                            'booking_id': booking.id
+                        })
+                    except Booking.DoesNotExist:
+                        return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+                
+                return Response({
+                    'success': True,
+                    'message': 'Payment verified',
+                    'details': verification_response
+                })
+            else:
+                return Response({
+                    'error': 'Payment verification failed',
+                    'details': verification_response
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
