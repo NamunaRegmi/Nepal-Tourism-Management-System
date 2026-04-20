@@ -4,6 +4,7 @@ const API_URL = 'http://127.0.0.1:8000/api/';
 
 const api = axios.create({
     baseURL: API_URL,
+    timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -30,7 +31,7 @@ api.interceptors.response.use(
         const originalRequest = error.config;
 
         // If error is 401 and we haven't tried to refresh yet
-        if (error.response.status === 401 && !originalRequest._retry) {
+        if (error?.response?.status === 401 && originalRequest && !originalRequest._retry) {
             originalRequest._retry = true;
 
             try {
@@ -45,6 +46,11 @@ api.interceptors.response.use(
                 console.error("Refresh token failed", e);
             }
         }
+
+        if (error?.code === 'ECONNABORTED') {
+            console.error('API request timed out:', error.config?.url);
+        }
+
         return Promise.reject(error);
     }
 );

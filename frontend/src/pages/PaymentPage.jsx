@@ -50,18 +50,13 @@ export default function PaymentPage({ onNavigate }) {
 
     try {
       if (paymentMethod === 'khalti') {
-        const paymentResponse = await khaltiService.initiatePayment(bookingId);
-        
+        const returnUrl = `${window.location.origin}/payment/verify`;
+        const paymentResponse = await khaltiService.initiatePayment(bookingId, returnUrl);
+
         if (paymentResponse.payment_url) {
-          await khaltiService.openPaymentWindow(paymentResponse.payment_url);
-          toast.success('Payment completed! Redirecting...');
-          setTimeout(() => {
-            if (onNavigate) {
-              onNavigate('user-dashboard');
-            } else {
-              window.location.href = '/';
-            }
-          }, 2000);
+          // Redirect to Khalti payment page (full-page redirect)
+          window.location.href = paymentResponse.payment_url;
+          return;
         }
       } else if (paymentMethod === 'esewa') {
         // Store booking ID in localStorage for retrieval after eSewa redirect

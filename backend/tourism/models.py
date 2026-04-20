@@ -9,6 +9,7 @@ class User(AbstractUser):
         ('guide', 'Tour Guide'),
     )
     
+    
     role = models.CharField(max_length=20, choices=USER_ROLES, default='user')
     phone = models.CharField(max_length=15, blank=True)
     profile_picture = models.URLField(blank=True, null=True)
