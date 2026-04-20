@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import 'leaflet/dist/leaflet.css';
 import { MapPin, Star, List, Grid, ChevronRight, Map as MapIcon, Info, CloudSun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -53,7 +54,11 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
             setDestinations(res.data || []);
         } catch (err) {
             console.error("Failed to fetch destinations", err);
-            setError('Failed to load destinations. Please try again.');
+            setError(
+                err?.code === 'ECONNABORTED'
+                    ? 'Destination request timed out. Please try again.'
+                    : 'Failed to load destinations. Please try again.'
+            );
             setDestinations([]);
         } finally {
             setLoading(false);

@@ -41,7 +41,6 @@ class HotelSerializer(serializers.ModelSerializer):
 
 
 class DestinationSerializer(serializers.ModelSerializer):
-    hotels = HotelSerializer(many=True, read_only=True)
     hotels_count = serializers.SerializerMethodField()
     
     class Meta:
@@ -49,11 +48,14 @@ class DestinationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'province', 'description', 'image', 
             'highlights', 'best_time_to_visit', 'latitude', 'longitude',
-            'is_active', 'created_at', 'updated_at', 'hotels', 'hotels_count'
+            'is_active', 'created_at', 'updated_at', 'hotels_count'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
     
     def get_hotels_count(self, obj):
+        annotated_count = getattr(obj, 'hotels_count', None)
+        if annotated_count is not None:
+            return annotated_count
         return obj.hotels.filter(is_active=True).count()
 
 

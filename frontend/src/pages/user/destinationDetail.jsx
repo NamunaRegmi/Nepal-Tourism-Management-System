@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import 'leaflet/dist/leaflet.css';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,7 +56,13 @@ function DestinationDetail({ destinationId, onNavigate }) {
   };
 
   const fetchData = useCallback(async () => {
-    if (!destinationId) return;
+    if (!destinationId) {
+      setDestination(null);
+      setHotels([]);
+      setError('No destination selected.');
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -66,7 +73,11 @@ function DestinationDetail({ destinationId, onNavigate }) {
       setHotels(hotelsRes.data);
     } catch (err) {
       console.error("Failed to fetch destination details", err);
-      setError("Failed to load destination details.");
+      setError(
+        err?.code === 'ECONNABORTED'
+          ? 'Destination details request timed out.'
+          : 'Failed to load destination details.'
+      );
     } finally {
       setLoading(false);
     }
@@ -103,7 +114,7 @@ function DestinationDetail({ destinationId, onNavigate }) {
   
   if (!destination) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-      <h2 className="text-2xl font-bold text-gray-800">Destination not found</h2>
+      <h2 className="text-2xl font-bold text-gray-800">{error || 'Destination not found'}</h2>
       <Button onClick={() => onNavigate('destination-results')} className="mt-4">Back to Destinations</Button>
     </div>
   );

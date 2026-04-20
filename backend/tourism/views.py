@@ -282,7 +282,13 @@ class DestinationListView(APIView):
     permission_classes = [AllowAny]  # Anyone can view destinations
     
     def get(self, request):
-        destinations = Destination.objects.filter(is_active=True)
+        destinations = Destination.objects.filter(is_active=True).annotate(
+            hotels_count=models.Count(
+                'hotels',
+                filter=models.Q(hotels__is_active=True),
+                distinct=True,
+            )
+        )
         serializer = DestinationSerializer(destinations, many=True)
         return Response(serializer.data)
     
@@ -313,7 +319,13 @@ class DestinationDetailView(APIView):
     
     def get(self, request, pk):
         try:
-            destination = Destination.objects.get(pk=pk, is_active=True)
+            destination = Destination.objects.filter(pk=pk, is_active=True).annotate(
+                hotels_count=models.Count(
+                    'hotels',
+                    filter=models.Q(hotels__is_active=True),
+                    distinct=True,
+                )
+            ).get()
             serializer = DestinationSerializer(destination)
             return Response(serializer.data)
         except Destination.DoesNotExist:
@@ -1067,10 +1079,32 @@ class KhaltiPaymentVerifyView(APIView):
             
             # Check if verification was successful
             if verification_response.get('status') == 'Completed':
-                # Extract booking_id from purchase_order_id if available
-                # For now, we'll assume the booking is found and update it
-                # In production, you should have a way to map pidx to booking
-                
+                # Extract booking_id from purchase_order_id
+                purchase_order_id = verification_response.get('purchase_order_id', '')
+                booking_id = None
+                if purchase_order_id and purchase_order_id.startswith('BOOK-'):
+                    try:
+                        booking_id = int(purchase_order_id.split('-')[1])
+                    except (ValueError, IndexError):
+                        pass
+
+                if booking_id:
+                    try:
+                        booking = Booking.objects.get(id=booking_id, user=request.user)
+                        booking.payment_status = 'paid'
+                        booking.payment_method = 'khalti'
+                        booking.status = 'confirmed'
+                        booking.save()
+
+                        return Response({
+                            'success': True,
+                            'message': 'Payment verified and booking confirmed',
+                            'booking_id': booking.id,
+                            'payment_details': verification_response
+                        })
+                    except Booking.DoesNotExist:
+                        pass
+
                 return Response({
                     'success': True,
                     'message': 'Payment verified successfully',
@@ -1098,22 +1132,22 @@ class KhaltiPaymentCallbackView(APIView):
     def get(self, request):
         try:
             pidx = request.GET.get('pidx')
-            status = request.GET.get('status')
+            payment_status = request.GET.get('status')
             transaction_id = request.GET.get('transaction_id')
             amount = request.GET.get('amount')
             purchase_order_id = request.GET.get('purchase_order_id')
-            
+
             if not pidx:
                 return Response({'error': 'Payment identifier (pidx) is required'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             # Log the callback for debugging
-            print(f"Khalti Callback: pidx={pidx}, status={status}, transaction_id={transaction_id}")
-            
-            if status == 'Completed':
+            print(f"Khalti Callback: pidx={pidx}, status={payment_status}, transaction_id={transaction_id}")
+
+            if payment_status == 'Completed':
                 # Payment was successful, verify with lookup API
                 khalti = KhaltiPaymentGateway()
                 verification_response = khalti.verify_payment(pidx)
-                
+
                 if not verification_response.get('error') and verification_response.get('status') == 'Completed':
                     # Extract booking_id from purchase_order_id
                     booking_id = None
@@ -1122,7 +1156,7 @@ class KhaltiPaymentCallbackView(APIView):
                             booking_id = int(purchase_order_id.split('-')[1])
                         except (ValueError, IndexError):
                             pass
-                    
+
                     if booking_id:
                         try:
                             booking = Booking.objects.get(id=booking_id)
@@ -1130,7 +1164,7 @@ class KhaltiPaymentCallbackView(APIView):
                             booking.payment_method = 'khalti'
                             booking.status = 'confirmed'
                             booking.save()
-                            
+
                             return Response({
                                 'success': True,
                                 'message': 'Payment verified and booking confirmed',
@@ -1138,7 +1172,7 @@ class KhaltiPaymentCallbackView(APIView):
                             })
                         except Booking.DoesNotExist:
                             return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
-                    
+
                     return Response({
                         'success': True,
                         'message': 'Payment verified',
@@ -1146,12 +1180,12 @@ class KhaltiPaymentCallbackView(APIView):
                     })
                 else:
                     return Response({'error': 'Payment verification failed'}, status=status.HTTP_400_BAD_REQUEST)
-            elif status == 'User canceled':
+            elif payment_status == 'User canceled':
                 return Response({'error': 'Payment was cancelled by user'}, status=status.HTTP_400_BAD_REQUEST)
-            elif status == 'Pending':
+            elif payment_status == 'Pending':
                 return Response({'error': 'Payment is pending'}, status=status.HTTP_400_BAD_REQUEST)
             else:
-                return Response({'error': f'Payment failed with status: {status}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': f'Payment failed with status: {payment_status}'}, status=status.HTTP_400_BAD_REQUEST)
                 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

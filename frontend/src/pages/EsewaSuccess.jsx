@@ -25,29 +25,18 @@ export default function EsewaSuccess({ onNavigate }) {
         
         console.log('eSewa callback data:', callbackData);
 
-        // If no parameters from eSewa, check if we have a stored booking ID
+        // If no parameters from eSewa, we can't verify
         if (!callbackData.transaction_uuid || !callbackData.total_amount) {
-          const storedBookingId = localStorage.getItem('esewa_booking_id');
-          
-          if (storedBookingId) {
-            console.log('No eSewa parameters, but found stored booking ID:', storedBookingId);
-            // Clear the stored ID
-            localStorage.removeItem('esewa_booking_id');
-            
-            // Show success message (payment was completed on eSewa's side)
-            setVerificationResult({
-              success: true,
-              booking_id: storedBookingId,
-              message: 'Payment completed successfully'
-            });
-            setVerifying(false);
-            return;
-          }
-          
-          setError('Invalid payment callback. Please complete the payment process first.');
+          // Clean up stored booking ID if present
+          localStorage.removeItem('esewa_booking_id');
+
+          setError('Invalid payment callback. Missing transaction details from eSewa. Please try the payment again.');
           setVerifying(false);
           return;
         }
+
+        // Clean up stored booking ID now that we have real callback params
+        localStorage.removeItem('esewa_booking_id');
 
         // Verify payment with backend
         const result = await esewaService.verifyPayment(

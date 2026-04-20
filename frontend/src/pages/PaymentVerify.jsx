@@ -1,22 +1,21 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { Button } from '../components/ui/button';
 import { CheckCircle, XCircle, Loader2, ArrowLeft } from 'lucide-react';
-import khaltiService from '@/services/khaltiService';
+import khaltiService from '../services/khaltiService';
 
-const PaymentVerify = () => {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+const PaymentVerify = ({ onNavigate }) => {
   const [status, setStatus] = useState('loading'); // loading, success, error
   const [message, setMessage] = useState('');
   const [bookingDetails, setBookingDetails] = useState(null);
 
   useEffect(() => {
     const verifyPayment = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+
       // Parse callback parameters from Khalti
       const callbackData = khaltiService.parseCallbackParams(searchParams);
-      
+
       const { pidx, status: paymentStatus, transaction_id, amount, purchase_order_id } = callbackData;
 
       if (!pidx) {
@@ -69,14 +68,22 @@ const PaymentVerify = () => {
     };
 
     verifyPayment();
-  }, [searchParams]);
+  }, []);
 
   const handleGoHome = () => {
-    navigate('/');
+    if (onNavigate) {
+      onNavigate('home');
+    } else {
+      window.location.href = '/';
+    }
   };
 
   const handleViewBookings = () => {
-    navigate('/destination-results');
+    if (onNavigate) {
+      onNavigate('user-dashboard');
+    } else {
+      window.location.href = '/';
+    }
   };
 
   if (status === 'loading') {
@@ -111,9 +118,6 @@ const PaymentVerify = () => {
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Go Home
                 </Button>
-                <Button onClick={() => window.close()} className="w-full">
-                  Close Window
-                </Button>
               </div>
             </div>
           </CardContent>
@@ -132,7 +136,7 @@ const PaymentVerify = () => {
           <div className="text-center">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Payment Successful!</h3>
             <p className="text-sm text-gray-600 mb-4">{message}</p>
-            
+
             {bookingDetails && (
               <div className="bg-gray-50 rounded-lg p-4 mb-4 text-left w-full">
                 <h4 className="font-semibold text-gray-900 mb-2">Booking Details</h4>
@@ -156,7 +160,7 @@ const PaymentVerify = () => {
                 </div>
               </div>
             )}
-            
+
             <div className="space-y-2 w-full">
               <Button onClick={handleViewBookings} className="w-full">
                 View My Bookings
