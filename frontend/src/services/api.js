@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { notifyAppDataChanged } from '@/lib/dataSync';
 
 const API_URL = 'http://127.0.0.1:8000/api/';
 
@@ -65,6 +66,7 @@ export const authService = {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
+        notifyAppDataChanged();
     }),
 };
 

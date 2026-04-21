@@ -93,11 +93,11 @@ export default function EsewaSuccess({ onNavigate }) {
           </CardHeader>
           <CardContent className="space-y-4">
             <Button
-              onClick={() => onNavigate ? onNavigate('user-dashboard') : window.location.href = '/'}
+              onClick={() => onNavigate ? onNavigate('home') : window.location.href = '/'}
               className="w-full"
               variant="outline"
             >
-              Go to Dashboard
+              Go Home
             </Button>
           </CardContent>
         </Card>
@@ -139,7 +139,7 @@ export default function EsewaSuccess({ onNavigate }) {
             </div>
           )}
           <Button
-            onClick={() => onNavigate ? onNavigate('user-dashboard') : window.location.href = '/'}
+            onClick={() => onNavigate ? onNavigate('user-bookings') : window.location.href = '/'}
             className="w-full"
           >
             View My Bookings

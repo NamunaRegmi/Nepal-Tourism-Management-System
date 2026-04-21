@@ -80,7 +80,7 @@ const PaymentVerify = ({ onNavigate }) => {
 
   const handleViewBookings = () => {
     if (onNavigate) {
-      onNavigate('user-dashboard');
+      onNavigate('user-bookings');
     } else {
       window.location.href = '/';
     }

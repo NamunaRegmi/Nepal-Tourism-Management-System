@@ -36,10 +36,10 @@ export default function EsewaFailure({ onNavigate }) {
           )}
           <div className="space-y-2">
             <Button
-              onClick={() => onNavigate ? onNavigate('user-dashboard') : window.location.href = '/'}
+              onClick={() => onNavigate ? onNavigate('home') : window.location.href = '/'}
               className="w-full"
             >
-              Go to Dashboard
+              Go Home
             </Button>
             <Button
               onClick={() => window.history.back()}

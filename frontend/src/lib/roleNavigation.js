@@ -35,7 +35,7 @@ export function getNavLinksForRole(role) {
   switch ((role || '').toLowerCase()) {
     case 'user':
       return [
-        { label: 'Dashboard', key: 'user-dashboard' },
+        { label: 'Home', key: 'home' },
         { label: 'Explore', key: 'destination-results' },
         { label: 'My Bookings', key: 'user-bookings' },
         { label: 'Wishlist', key: 'user-wishlist' },
