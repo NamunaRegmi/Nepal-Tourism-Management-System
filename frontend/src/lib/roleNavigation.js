@@ -25,7 +25,7 @@ export function getLandingPageForRole(role) {
     case 'guide':
       return 'guide-dashboard';
     case 'user':
-      return 'user-dashboard';
+      return 'home';
     default:
       return 'home';
   }
