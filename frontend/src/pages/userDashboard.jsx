@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { destinationService, bookingService, guideBookingService, authService } from '@/services/api';
+import { createObjectPreview, getCloudinaryUploadEnabled, uploadImageToCloudinary } from '@/services/cloudinary';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 import { toast } from 'react-hot-toast';
 
@@ -29,6 +30,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
   });
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
   const [photoFileName, setPhotoFileName] = useState('');
+  const [profilePhotoFile, setProfilePhotoFile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const getDestinationMeta = (dest) => {
@@ -139,6 +141,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
             profile_picture: profileData.profile_picture || '',
           });
           setProfilePhotoUrl(profileData.profile_picture || '');
+          setProfilePhotoFile(null);
           localStorage.setItem('user', JSON.stringify(profileData));
         } catch (err) {
           console.error('Failed to load user profile', err);
@@ -213,6 +216,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
         profile_picture: parsed.profile_picture || prev.profile_picture,
       }));
       setProfilePhotoUrl(parsed.profile_picture || '');
+      setProfilePhotoFile(null);
     }
     if (view) {
       setActiveView(view);
@@ -226,27 +230,37 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result;
-      if (typeof dataUrl === 'string') {
-        setProfileForm((prev) => ({ ...prev, profile_picture: dataUrl }));
-        setProfilePhotoUrl('');
-        setPhotoFileName(file.name);
-      }
-    };
-    reader.readAsDataURL(file);
+    setProfilePhotoFile(file);
+    setPhotoFileName(file.name);
+    setProfilePhotoUrl('');
+    setProfileForm((prev) => ({ ...prev, profile_picture: createObjectPreview(file) }));
   };
 
   const handleSaveProfile = async () => {
     try {
-      const response = await authService.updateProfile(profileForm);
+      const payload = { ...profileForm };
+      if (profilePhotoFile) {
+        payload.profile_picture = await uploadImageToCloudinary(profilePhotoFile, 'nepal-tourism/users');
+      }
+
+      const response = await authService.updateProfile(payload);
       setUser(response.data);
+      setProfileForm({
+        username: response.data.username || '',
+        first_name: response.data.first_name || '',
+        last_name: response.data.last_name || '',
+        email: response.data.email || '',
+        phone: response.data.phone || '',
+        profile_picture: response.data.profile_picture || '',
+      });
+      setProfilePhotoUrl(response.data.profile_picture || '');
+      setProfilePhotoFile(null);
+      setPhotoFileName('');
       localStorage.setItem('user', JSON.stringify(response.data));
       toast.success('Your profile has been updated.');
     } catch (err) {
       console.error('Failed to save profile', err);
-      toast.error('Unable to update profile right now.');
+      toast.error(err.message || 'Unable to update profile right now.');
     }
   };
 
@@ -845,6 +859,9 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                                 className="sr-only"
                               />
                               <p className="text-sm leading-6 text-slate-500">Upload a square photo or paste an image URL below to update your profile picture.</p>
+                              {!getCloudinaryUploadEnabled() && (
+                                <p className="text-sm leading-6 text-amber-600">Cloudinary env vars are missing, so file upload is disabled. Use the image URL field below.</p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -864,7 +881,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                     </div>
                   </CardContent>
                   <div className="p-4 grid gap-3">
-                    <Button onClick={handleSaveProfile} className="w-full">
+                    <Button onClick={handleSaveProfile} className="w-full" disabled={profilePhotoFile && !getCloudinaryUploadEnabled()}>
                       Save changes
                     </Button>
                     <Button variant="outline" className="w-full" onClick={handleLogout}>
