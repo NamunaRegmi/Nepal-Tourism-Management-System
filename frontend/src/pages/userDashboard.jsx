@@ -371,11 +371,11 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
   const getDisplayTitle = () => {
     switch (activeView) {
       case 'bookings':
-        return 'My Bookings';
+        return 'Profile';
       case 'wishlist':
-        return 'Saved Tours';
+        return 'Profile';
       case 'profile':
-        return 'Profile Settings';
+        return 'Profile';
       case 'browse':
         return 'Browse Tours';
       default:
@@ -387,6 +387,21 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
   const profileDisplayName = getProfileDisplayName(user, profileForm);
   const profileInitials = getProfileInitials(user, profileForm);
   const profileImageSrc = (profileForm.profile_picture || '').trim() || getDefaultProfileImage(user, profileForm);
+  const profileTabValue = activeView === 'bookings' ? 'bookings' : activeView === 'wishlist' ? 'saved' : 'overview';
+
+  const handleProfileTabChange = (value) => {
+    if (value === 'bookings') {
+      setActiveView('bookings');
+      return;
+    }
+
+    if (value === 'saved') {
+      setActiveView('wishlist');
+      return;
+    }
+
+    setActiveView('profile');
+  };
 
   return (
     <div className="min-h-screen w-full bg-slate-50">
@@ -399,9 +414,9 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
               <p className="mt-2 text-base text-slate-600">
                 {activeView === 'dashboard' && 'Browse and explore Nepal’s most popular travel destinations.'}
                 {activeView === 'browse' && 'Tap a destination to view details and learn more.'}
-                {activeView === 'bookings' && 'Hotel, package, and tour guide requests. Cancel pending items when needed.'}
-                {activeView === 'wishlist' && 'View, remove, or revisit tours you have saved for later.'}
-                {activeView === 'profile' && 'Update your profile information and manage your account.'}
+                {activeView === 'bookings' && 'Manage bookings, guide requests, saved tours, and account settings in one place.'}
+                {activeView === 'wishlist' && 'Manage bookings, guide requests, saved tours, and account settings in one place.'}
+                {activeView === 'profile' && 'Manage bookings, guide requests, saved tours, and account settings in one place.'}
               </p>
             </div>
 
@@ -536,145 +551,6 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
               </div>
               )}
             </>
-          ) : activeView === 'bookings' ? (
-            <div className="space-y-10">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">Stays &amp; packages</h3>
-              <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
-              {bookings.length === 0 ? (
-                <div className="rounded-2xl bg-white p-8 shadow">
-                  <p className="text-slate-600">No hotel or package bookings yet.</p>
-                </div>
-              ) : (
-                bookings.map((booking) => (
-                  <Card key={booking.id} className="border shadow-sm">
-                    <CardHeader className="flex justify-between items-start py-4">
-                      <div>
-                        <CardTitle className="text-lg">
-                          {getBookingTitle(booking)}
-                        </CardTitle>
-                        <CardDescription>{getBookingType(booking)}</CardDescription>
-                      </div>
-                      <Badge
-                        variant={
-                          booking.status === 'confirmed'
-                            ? 'success'
-                            : booking.status === 'pending'
-                            ? 'secondary'
-                            : 'destructive'
-                        }
-                      >
-                        {booking.status}
-                      </Badge>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-2 text-sm text-slate-600">
-                        <div>
-                          <strong>Start:</strong> {booking.start_date}
-                        </div>
-                        {booking.end_date && (
-                          <div>
-                            <strong>End:</strong> {booking.end_date}
-                          </div>
-                        )}
-                        <div>
-                          <strong>Total:</strong> {booking.total_price}
-                        </div>
-                      </div>
-                    </CardContent>
-                    <div className="p-4 flex gap-2">
-                      {booking.status !== 'cancelled' && (
-                        <Button
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => handleCancelBooking(booking.id)}
-                        >
-                          Cancel booking
-                        </Button>
-                      )}
-                    </div>
-                  </Card>
-                ))
-              )}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">Tour guide requests</h3>
-              <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
-                {guideBookings.length === 0 ? (
-                  <div className="rounded-2xl bg-white p-8 shadow border border-slate-100">
-                    <p className="text-slate-600">No guide requests yet. Browse <button type="button" className="text-blue-600 underline" onClick={() => onNavigate('guides')}>tour guides</button> to book someone.</p>
-                  </div>
-                ) : (
-                  guideBookings.map((gb) => (
-                    <Card key={gb.id} className="border shadow-sm border-emerald-100">
-                      <CardHeader className="flex justify-between items-start py-4">
-                        <div>
-                          <CardTitle className="text-lg">Guide: {gb.guide_display_name}</CardTitle>
-                          <CardDescription>Tour guide booking</CardDescription>
-                        </div>
-                        <Badge variant={gb.status === 'confirmed' ? 'default' : gb.status === 'pending' ? 'secondary' : 'destructive'}>
-                          {gb.status}
-                        </Badge>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid gap-2 text-sm text-slate-600">
-                          <div><strong>Dates:</strong> {gb.start_date} → {gb.end_date}</div>
-                          <div><strong>Total:</strong> Rs. {Number(gb.total_price || 0).toLocaleString('en-IN')}</div>
-                        </div>
-                      </CardContent>
-                      <div className="p-4 flex gap-2">
-                        {gb.status !== 'cancelled' && gb.status !== 'completed' && (
-                          <Button variant="outline" className="w-full" onClick={() => handleCancelGuideBooking(gb.id)}>
-                            Cancel request
-                          </Button>
-                        )}
-                      </div>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </div>
-            </div>
-          ) : activeView === 'wishlist' ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {getWishlistDestinations().length === 0 ? (
-                <div className="rounded-2xl bg-white p-8 shadow">
-                  <p className="text-slate-600">You haven't saved any tours yet. Browse destinations and hit "Save" to keep them here.</p>
-                </div>
-              ) : (
-                getWishlistDestinations().map((dest, i) => {
-                  const meta = getDestinationMeta(dest);
-                  return (
-                    <Card key={dest.id || i} className="overflow-hidden shadow-lg hover:shadow-2xl transition-all">
-                      <div className="relative h-40 overflow-hidden">
-                        <img
-                          src={meta.image || dest.image || 'https://via.placeholder.com/600x320'}
-                          alt={dest.name}
-                          className="h-full w-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                      </div>
-                      <div className="p-4 bg-white">
-                        <h3 className="text-lg font-semibold text-slate-900">{dest.name}</h3>
-                        <div className="mt-2 text-xs text-slate-600">
-                          {dest.description?.slice(0, 80)}{dest.description?.length > 80 ? '…' : ''}
-                        </div>
-                        <div className="mt-4 flex items-center gap-2">
-                          <Button size="sm" className="flex-1" onClick={() => onSelectDestination(dest.id)}>
-                            View
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => toggleWishlistItem(dest.id)}>
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })
-              )}
-            </div>
           ) : (
             <div className="space-y-6">
               <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
@@ -723,7 +599,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                   </div>
 
                   <CardContent className="px-6 py-8">
-                    <Tabs defaultValue="overview" className="space-y-6">
+                    <Tabs value={profileTabValue} onValueChange={handleProfileTabChange} className="space-y-6">
                       <TabsList className="grid grid-cols-4 gap-2">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="bookings">Bookings</TabsTrigger>
@@ -753,30 +629,86 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                       </TabsContent>
 
                       <TabsContent value="bookings">
-                        {bookings.length === 0 ? (
-                          <div className="rounded-3xl bg-slate-50 p-6 text-slate-600">You have no hotel or package bookings yet.</div>
-                        ) : (
-                          <div className="grid gap-4">
-                            {bookings.map((booking) => (
-                                <div key={booking.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                                  <div className="flex items-center justify-between gap-4">
-                                    <div>
-                                    <p className="text-sm text-slate-500">{getBookingType(booking)}</p>
-                                    <p className="mt-1 text-lg font-semibold text-slate-900">{getBookingTitle(booking)}</p>
+                        <div className="space-y-8">
+                          <div>
+                            <h3 className="mb-4 text-lg font-semibold text-slate-900">Stays &amp; packages</h3>
+                            {bookings.length === 0 ? (
+                              <div className="rounded-3xl bg-slate-50 p-6 text-slate-600">You have no hotel or package bookings yet.</div>
+                            ) : (
+                              <div className="grid gap-4">
+                                {bookings.map((booking) => (
+                                  <div key={booking.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                    <div className="flex items-center justify-between gap-4">
+                                      <div>
+                                        <p className="text-sm text-slate-500">{getBookingType(booking)}</p>
+                                        <p className="mt-1 text-lg font-semibold text-slate-900">{getBookingTitle(booking)}</p>
+                                      </div>
+                                      <Badge variant={booking.status === 'confirmed' ? 'success' : booking.status === 'pending' ? 'secondary' : 'destructive'}>
+                                        {booking.status}
+                                      </Badge>
+                                    </div>
+                                    <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                                      <div><strong>Start:</strong> {booking.start_date}</div>
+                                      {booking.end_date && <div><strong>End:</strong> {booking.end_date}</div>}
+                                      <div><strong>Total:</strong> {booking.total_price}</div>
+                                    </div>
+                                    {booking.status !== 'cancelled' && (
+                                      <div className="mt-4">
+                                        <Button
+                                          variant="outline"
+                                          className="w-full"
+                                          onClick={() => handleCancelBooking(booking.id)}
+                                        >
+                                          Cancel booking
+                                        </Button>
+                                      </div>
+                                    )}
                                   </div>
-                                  <Badge variant={booking.status === 'confirmed' ? 'success' : booking.status === 'pending' ? 'secondary' : 'destructive'}>
-                                    {booking.status}
-                                  </Badge>
-                                </div>
-                                <div className="mt-4 grid gap-2 sm:grid-cols-2 text-sm text-slate-600">
-                                  <div><strong>Start:</strong> {booking.start_date}</div>
-                                  {booking.end_date && <div><strong>End:</strong> {booking.end_date}</div>}
-                                  <div><strong>Total:</strong> {booking.total_price}</div>
-                                </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
                           </div>
-                        )}
+
+                          <div>
+                            <h3 className="mb-4 text-lg font-semibold text-slate-900">Tour guide requests</h3>
+                            {guideBookings.length === 0 ? (
+                              <div className="rounded-3xl bg-slate-50 p-6 text-slate-600">
+                                No guide requests yet. Browse{' '}
+                                <button type="button" className="text-blue-600 underline" onClick={() => onNavigate('guides')}>
+                                  tour guides
+                                </button>{' '}
+                                to book someone.
+                              </div>
+                            ) : (
+                              <div className="grid gap-4">
+                                {guideBookings.map((gb) => (
+                                  <div key={gb.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                    <div className="flex items-center justify-between gap-4">
+                                      <div>
+                                        <p className="text-sm text-slate-500">Tour guide booking</p>
+                                        <p className="mt-1 text-lg font-semibold text-slate-900">{gb.guide_display_name}</p>
+                                      </div>
+                                      <Badge variant={gb.status === 'confirmed' ? 'default' : gb.status === 'pending' ? 'secondary' : 'destructive'}>
+                                        {gb.status}
+                                      </Badge>
+                                    </div>
+                                    <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                                      <div><strong>Dates:</strong> {gb.start_date} → {gb.end_date}</div>
+                                      <div><strong>Total:</strong> Rs. {Number(gb.total_price || 0).toLocaleString('en-IN')}</div>
+                                    </div>
+                                    {gb.status !== 'cancelled' && gb.status !== 'completed' && (
+                                      <div className="mt-4">
+                                        <Button variant="outline" className="w-full" onClick={() => handleCancelGuideBooking(gb.id)}>
+                                          Cancel request
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </TabsContent>
 
                       <TabsContent value="activity">
@@ -813,12 +745,32 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                           {getWishlistDestinations().length === 0 ? (
                             <div className="rounded-3xl bg-slate-50 p-6 text-slate-600">No saved tours yet. Save your favorites to see them here.</div>
                           ) : (
-                            <div className="space-y-3">
+                            <div className="grid gap-4 sm:grid-cols-2">
                               {getWishlistDestinations().map((dest) => (
-                                <div key={dest.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                                  <p className="font-semibold text-slate-900">{dest.name}</p>
-                                  <p className="text-sm text-slate-500">{dest.province}</p>
-                                </div>
+                                <Card key={dest.id} className="overflow-hidden rounded-3xl border border-slate-200 shadow-sm">
+                                  <div className="relative h-40 overflow-hidden">
+                                    <img
+                                      src={getDestinationMeta(dest).image || dest.image || 'https://via.placeholder.com/600x320'}
+                                      alt={dest.name}
+                                      className="h-full w-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                  </div>
+                                  <div className="space-y-3 p-4">
+                                    <div>
+                                      <p className="font-semibold text-slate-900">{dest.name}</p>
+                                      <p className="text-sm text-slate-500">{dest.province}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Button size="sm" className="flex-1" onClick={() => onSelectDestination(dest.id)}>
+                                        View
+                                      </Button>
+                                      <Button size="sm" variant="outline" onClick={() => toggleWishlistItem(dest.id)}>
+                                        Remove
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </Card>
                               ))}
                             </div>
                           )}
