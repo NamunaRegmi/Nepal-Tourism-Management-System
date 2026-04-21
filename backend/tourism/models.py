@@ -46,11 +46,12 @@ class Destination(models.Model):
         ('Karnali', 'Karnali Province'),
         ('Sudurpashchim', 'Sudurpashchim Province'),
     )
-    
+
     name = models.CharField(max_length=200)
     province = models.CharField(max_length=50, choices=PROVINCE_CHOICES)
     description = models.TextField()
-    image = models.URLField(help_text="URL of the main destination image")
+    image = models.URLField(blank=True, default='', help_text="External URL of the main destination image")
+    image_file = models.ImageField(upload_to='destinations/', blank=True, null=True, help_text="Uploaded image file")
     highlights = models.JSONField(default=list, help_text="List of key attractions")
     best_time_to_visit = models.CharField(max_length=200)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -59,10 +60,16 @@ class Destination(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_destinations')
-    
+
+    @property
+    def image_url(self):
+        if self.image_file:
+            return self.image_file.url
+        return self.image or ''
+
     class Meta:
         ordering = ['-created_at']
-    
+
     def __str__(self):
         return self.name
 
@@ -73,7 +80,8 @@ class Hotel(models.Model):
     destination = models.ForeignKey(Destination, on_delete=models.CASCADE, related_name='hotels')
     name = models.CharField(max_length=200)
     description = models.TextField()
-    image = models.URLField(help_text="URL of the hotel image")
+    image = models.URLField(blank=True, default='', help_text="External URL of the hotel image")
+    image_file = models.ImageField(upload_to='hotels/', blank=True, null=True, help_text="Uploaded image file")
     rating = models.DecimalField(max_digits=2, decimal_places=1, default=0.0)
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='USD')
@@ -85,10 +93,16 @@ class Hotel(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    @property
+    def image_url(self):
+        if self.image_file:
+            return self.image_file.url
+        return self.image or ''
+
     class Meta:
         ordering = ['-rating']
-    
+
     def __str__(self):
         return f"{self.name} - {self.destination.name}"
 
@@ -101,8 +115,15 @@ class Room(models.Model):
     capacity = models.IntegerField(default=2)
     description = models.TextField(blank=True)
     image = models.URLField(blank=True, null=True)
+    image_file = models.ImageField(upload_to='rooms/', blank=True, null=True)
     is_available = models.BooleanField(default=True)
-    
+
+    @property
+    def image_url(self):
+        if self.image_file:
+            return self.image_file.url
+        return self.image or ''
+
     def __str__(self):
         return f"{self.room_type} - {self.hotel.name}"
 
@@ -116,9 +137,16 @@ class Package(models.Model):
     duration_days = models.IntegerField()
     destinations = models.ManyToManyField(Destination, related_name='packages')
     image = models.URLField(blank=True, null=True)
+    image_file = models.ImageField(upload_to='packages/', blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
+    @property
+    def image_url(self):
+        if self.image_file:
+            return self.image_file.url
+        return self.image or ''
+
     def __str__(self):
         return self.name
 
@@ -164,10 +192,17 @@ class TourGuideProfile(models.Model):
     daily_rate = models.DecimalField(max_digits=10, decimal_places=2, help_text='NPR per day')
     certifications = models.TextField(blank=True)
     image = models.URLField(blank=True, null=True)
+    image_file = models.ImageField(upload_to='guides/', blank=True, null=True)
     destinations = models.ManyToManyField(Destination, related_name='tour_guides', blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def image_url(self):
+        if self.image_file:
+            return self.image_file.url
+        return self.image or ''
 
     class Meta:
         ordering = ['-created_at']

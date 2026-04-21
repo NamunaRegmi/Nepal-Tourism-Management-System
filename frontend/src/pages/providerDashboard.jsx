@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { bookingService, hotelService, destinationService, authService } from '@/services/api';
+import { createObjectPreview, getCloudinaryUploadEnabled, uploadImageToCloudinary } from '@/services/cloudinary';
 import { cn } from '@/lib/utils';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 
@@ -59,6 +60,9 @@ const ProviderDashboard = ({ onNavigate }) => {
     image: '',
     amenities: ''
   });
+  const [hotelImageFile, setHotelImageFile] = useState(null);
+  const [hotelImagePreview, setHotelImagePreview] = useState('');
+  const [savingHotel, setSavingHotel] = useState(false);
   const [hotelDialogOpen, setHotelDialogOpen] = useState(false);
 
   // Stats data
@@ -144,6 +148,8 @@ const ProviderDashboard = ({ onNavigate }) => {
       image: '',
       amenities: ''
     });
+    setHotelImageFile(null);
+    setHotelImagePreview('');
     setEditingHotel(null);
     setIsAddingHotel(true);
     setHotelDialogOpen(true);
@@ -160,16 +166,40 @@ const ProviderDashboard = ({ onNavigate }) => {
       image: hotel.image || '',
       amenities: hotel.amenities || ''
     });
+    setHotelImageFile(null);
+    setHotelImagePreview(hotel.image || '');
     setEditingHotel(hotel);
     setIsAddingHotel(false);
     setHotelDialogOpen(true);
   };
 
+  const handleHotelImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      window.alert('Choose a valid image file.');
+      event.target.value = '';
+      return;
+    }
+
+    if (hotelImagePreview && hotelImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(hotelImagePreview);
+    }
+
+    setHotelImageFile(file);
+    setHotelImagePreview(createObjectPreview(file));
+  };
+
   const handleSaveHotel = async () => {
+    setSavingHotel(true);
     try {
+      let imageUrl = (hotelForm.image && String(hotelForm.image).trim()) || '';
+      if (hotelImageFile) {
+        imageUrl = await uploadImageToCloudinary(hotelImageFile, 'nepal-tourism/hotels');
+      }
       const payload = {
         ...hotelForm,
-        image: (hotelForm.image && String(hotelForm.image).trim()) || DEFAULT_HOTEL_IMAGE,
+        image: imageUrl || DEFAULT_HOTEL_IMAGE,
       };
       if (isAddingHotel) {
         await hotelService.create(payload);
@@ -177,11 +207,18 @@ const ProviderDashboard = ({ onNavigate }) => {
         await hotelService.update(editingHotel.id, payload);
       }
 
+      if (hotelImagePreview && hotelImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(hotelImagePreview);
+      }
+      setHotelImageFile(null);
+      setHotelImagePreview('');
       setHotelDialogOpen(false);
       notifyAppDataChanged();
     } catch (error) {
       console.error('Failed to save hotel:', error);
-      window.alert(error.response?.data ? JSON.stringify(error.response.data) : 'Could not save property. Check required fields and API.');
+      window.alert(error.response?.data ? JSON.stringify(error.response.data) : (error.message || 'Could not save property. Check required fields and API.'));
+    } finally {
+      setSavingHotel(false);
     }
   };
 
@@ -736,6 +773,36 @@ const ProviderDashboard = ({ onNavigate }) => {
               />
             </div>
             <div>
+              <Label htmlFor="hotel_image_file">Property image</Label>
+              <Input
+                id="hotel_image_file"
+                type="file"
+                accept="image/*"
+                onChange={handleHotelImageChange}
+              />
+              {hotelImagePreview && (
+                <img
+                  src={hotelImagePreview}
+                  alt="Hotel preview"
+                  className="mt-3 h-32 w-full rounded-md object-cover border border-slate-200"
+                />
+              )}
+              <p className="mt-2 text-xs text-slate-500">
+                {getCloudinaryUploadEnabled()
+                  ? 'Choose a file to upload to Cloudinary, or leave it empty and use an external image URL below.'
+                  : 'Cloudinary env vars are missing, so file upload is disabled. Use the image URL field below.'}
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="hotel_image_url">Property image URL</Label>
+              <Input
+                id="hotel_image_url"
+                value={hotelForm.image}
+                onChange={(e) => setHotelForm({ ...hotelForm, image: e.target.value })}
+                placeholder="https://example.com/property.jpg"
+              />
+            </div>
+            <div>
               <Label htmlFor="amenities">Amenities</Label>
               <Input
                 id="amenities"
@@ -749,9 +816,9 @@ const ProviderDashboard = ({ onNavigate }) => {
             <Button variant="outline" onClick={() => setHotelDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveHotel} disabled={!hotelForm.name || !hotelForm.destination_id}>
+            <Button onClick={handleSaveHotel} disabled={!hotelForm.name || !hotelForm.destination_id || savingHotel || (hotelImageFile && !getCloudinaryUploadEnabled())}>
               <Save className="h-4 w-4 mr-2" />
-              {isAddingHotel ? 'Add Property' : 'Update Property'}
+              {savingHotel ? 'Saving…' : isAddingHotel ? 'Add Property' : 'Update Property'}
             </Button>
           </DialogFooter>
         </DialogContent>

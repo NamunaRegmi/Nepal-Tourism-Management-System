@@ -11,16 +11,30 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RoomSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    image_file = serializers.ImageField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = Room
-        fields = ['id', 'hotel', 'room_type', 'price', 'capacity', 'description', 'image', 'is_available']
+        fields = ['id', 'hotel', 'room_type', 'price', 'capacity', 'description', 'image', 'image_file', 'image_url', 'is_available']
         read_only_fields = ['id', 'hotel']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image_file:
+            url = obj.image_file.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return obj.image or ''
 
 
 class HotelSerializer(serializers.ModelSerializer):
     rooms = RoomSerializer(many=True, read_only=True)
     provider_name = serializers.CharField(source='provider.username', read_only=True, allow_null=True)
     destination_id = serializers.IntegerField(read_only=True)
+    image_url = serializers.SerializerMethodField()
+    image_file = serializers.ImageField(required=False, allow_null=True, write_only=True)
 
     def validate_amenities(self, value):
         if value in (None, '', []):
@@ -32,31 +46,52 @@ class HotelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Hotel
         fields = [
-            'id', 'provider', 'provider_name', 'destination', 'destination_id', 'name', 'description', 'image', 'rating',
+            'id', 'provider', 'provider_name', 'destination', 'destination_id', 'name', 'description',
+            'image', 'image_file', 'image_url', 'rating',
             'price_per_night', 'currency', 'amenities',
             'contact_number', 'email', 'address', 'total_rooms',
             'is_active', 'created_at', 'updated_at', 'rooms'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'provider', 'destination']
 
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image_file:
+            url = obj.image_file.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return obj.image or ''
+
 
 class DestinationSerializer(serializers.ModelSerializer):
     hotels_count = serializers.SerializerMethodField()
-    
+    image_url = serializers.SerializerMethodField()
+    image_file = serializers.ImageField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = Destination
         fields = [
-            'id', 'name', 'province', 'description', 'image', 
+            'id', 'name', 'province', 'description', 'image', 'image_file', 'image_url',
             'highlights', 'best_time_to_visit', 'latitude', 'longitude',
             'is_active', 'created_at', 'updated_at', 'hotels_count'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
-    
+
     def get_hotels_count(self, obj):
         annotated_count = getattr(obj, 'hotels_count', None)
         if annotated_count is not None:
             return annotated_count
         return obj.hotels.filter(is_active=True).count()
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image_file:
+            url = obj.image_file.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return obj.image or ''
 
 
 class PackageSerializer(serializers.ModelSerializer):
@@ -65,14 +100,26 @@ class PackageSerializer(serializers.ModelSerializer):
     destination_ids = serializers.PrimaryKeyRelatedField(
         queryset=Destination.objects.all(), write_only=True, many=True, source='destinations'
     )
-    
+    image_url = serializers.SerializerMethodField()
+    image_file = serializers.ImageField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = Package
         fields = [
-            'id', 'provider', 'provider_name', 'name', 'description', 'price', 
-            'duration_days', 'destinations', 'destination_ids', 'image', 'is_active', 'created_at'
+            'id', 'provider', 'provider_name', 'name', 'description', 'price',
+            'duration_days', 'destinations', 'destination_ids', 'image', 'image_file', 'image_url',
+            'is_active', 'created_at'
         ]
         read_only_fields = ['id', 'created_at', 'provider']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image_file:
+            url = obj.image_file.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return obj.image or ''
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -106,15 +153,26 @@ class TourGuideProfileSerializer(serializers.ModelSerializer):
         source='destinations',
     )
     display_name = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    image_file = serializers.ImageField(required=False, allow_null=True, write_only=True)
 
     class Meta:
         model = TourGuideProfile
         fields = [
             'id', 'user', 'display_name', 'headline', 'bio', 'languages',
-            'years_experience', 'daily_rate', 'certifications', 'image',
+            'years_experience', 'daily_rate', 'certifications', 'image', 'image_file', 'image_url',
             'destinations', 'destination_ids', 'is_active', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image_file:
+            url = obj.image_file.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return obj.image or ''
 
     def get_display_name(self, obj):
         u = obj.user

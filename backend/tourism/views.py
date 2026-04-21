@@ -289,7 +289,7 @@ class DestinationListView(APIView):
                 distinct=True,
             )
         )
-        serializer = DestinationSerializer(destinations, many=True)
+        serializer = DestinationSerializer(destinations, many=True, context={'request': request})
         return Response(serializer.data)
     
     def post(self, request):
@@ -306,7 +306,7 @@ class DestinationListView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        serializer = DestinationSerializer(data=request.data)
+        serializer = DestinationSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(created_by=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -326,7 +326,7 @@ class DestinationDetailView(APIView):
                     distinct=True,
                 )
             ).get()
-            serializer = DestinationSerializer(destination)
+            serializer = DestinationSerializer(destination, context={'request': request})
             return Response(serializer.data)
         except Destination.DoesNotExist:
             return Response(
@@ -349,7 +349,7 @@ class DestinationDetailView(APIView):
         
         try:
             destination = Destination.objects.get(pk=pk)
-            serializer = DestinationSerializer(destination, data=request.data, partial=True)
+            serializer = DestinationSerializer(destination, data=request.data, partial=True, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data)
@@ -395,31 +395,31 @@ class HotelListView(APIView):
     
     def get(self, request, destination_id):
         hotels = Hotel.objects.filter(destination_id=destination_id, is_active=True)
-        serializer = HotelSerializer(hotels, many=True)
+        serializer = HotelSerializer(hotels, many=True, context={'request': request})
         return Response(serializer.data)
-    
+
     def post(self, request, destination_id):
         if not request.user.is_authenticated:
             return Response(
-                {'error': 'Authentication required'}, 
+                {'error': 'Authentication required'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
+
         if request.user.role not in ['admin', 'provider']:
             return Response(
-                {'error': 'Only admins and service providers can add hotels'}, 
+                {'error': 'Only admins and service providers can add hotels'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         try:
             destination = Destination.objects.get(pk=destination_id)
         except Destination.DoesNotExist:
             return Response(
-                {'error': 'Destination not found'}, 
+                {'error': 'Destination not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        serializer = HotelSerializer(data=request.data)
+
+        serializer = HotelSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(destination=destination, provider=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -443,7 +443,7 @@ class ProviderHotelListView(APIView):
             .select_related('destination', 'provider')
             .order_by('destination__name', 'name')
         )
-        serializer = HotelSerializer(hotels, many=True)
+        serializer = HotelSerializer(hotels, many=True, context={'request': request})
         return Response(serializer.data)
 
     def post(self, request):
@@ -467,7 +467,7 @@ class ProviderHotelListView(APIView):
         except Destination.DoesNotExist:
             return Response({'error': 'Destination not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = HotelSerializer(data=payload)
+        serializer = HotelSerializer(data=payload, context={'request': request})
         if serializer.is_valid():
             serializer.save(destination=destination, provider=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -481,7 +481,7 @@ class HotelDetailView(APIView):
     def get(self, request, pk):
         try:
             hotel = Hotel.objects.get(pk=pk, is_active=True)
-            serializer = HotelSerializer(hotel)
+            serializer = HotelSerializer(hotel, context={'request': request})
             return Response(serializer.data)
         except Hotel.DoesNotExist:
             return Response(
@@ -509,7 +509,7 @@ class HotelDetailView(APIView):
                     {'error': 'You can only update your own hotels'},
                     status=status.HTTP_403_FORBIDDEN
                 )
-            serializer = HotelSerializer(hotel, data=request.data, partial=True)
+            serializer = HotelSerializer(hotel, data=request.data, partial=True, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data)
@@ -559,7 +559,7 @@ class RoomListView(APIView):
     
     def get(self, request, hotel_id):
         rooms = Room.objects.filter(hotel_id=hotel_id, is_available=True)
-        serializer = RoomSerializer(rooms, many=True)
+        serializer = RoomSerializer(rooms, many=True, context={'request': request})
         return Response(serializer.data)
     
     def post(self, request, hotel_id):
@@ -575,7 +575,7 @@ class RoomListView(APIView):
         if request.user != hotel.provider and request.user.role != 'admin':
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
             
-        serializer = RoomSerializer(data=request.data)
+        serializer = RoomSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(hotel=hotel)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -595,21 +595,21 @@ class RoomDetailView(APIView):
         room = self.get_object(pk)
         if not room:
             return Response({'error': 'Room not found'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = RoomSerializer(room)
+        serializer = RoomSerializer(room, context={'request': request})
         return Response(serializer.data)
-        
+
     def put(self, request, pk):
         if not request.user.is_authenticated:
             return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
-            
+
         room = self.get_object(pk)
         if not room:
             return Response({'error': 'Room not found'}, status=status.HTTP_404_NOT_FOUND)
-            
+
         if request.user != room.hotel.provider and request.user.role != 'admin':
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
-            
-        serializer = RoomSerializer(room, data=request.data, partial=True)
+
+        serializer = RoomSerializer(room, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -636,14 +636,14 @@ class PackageListView(APIView):
     
     def get(self, request):
         packages = Package.objects.filter(is_active=True)
-        serializer = PackageSerializer(packages, many=True)
+        serializer = PackageSerializer(packages, many=True, context={'request': request})
         return Response(serializer.data)
-        
+
     def post(self, request):
         if not request.user.is_authenticated or request.user.role not in ['provider', 'admin']:
             return Response({'error': 'Only providers and admins can create packages'}, status=status.HTTP_403_FORBIDDEN)
-            
-        serializer = PackageSerializer(data=request.data)
+
+        serializer = PackageSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(provider=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -656,24 +656,24 @@ class PackageDetailView(APIView):
     def get(self, request, pk):
         try:
             package = Package.objects.get(pk=pk, is_active=True)
-            serializer = PackageSerializer(package)
+            serializer = PackageSerializer(package, context={'request': request})
             return Response(serializer.data)
         except Package.DoesNotExist:
             return Response({'error': 'Package not found'}, status=status.HTTP_404_NOT_FOUND)
-            
+
     def put(self, request, pk):
         if not request.user.is_authenticated:
             return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
-            
+
         try:
             package = Package.objects.get(pk=pk)
         except Package.DoesNotExist:
             return Response({'error': 'Package not found'}, status=status.HTTP_404_NOT_FOUND)
-            
+
         if request.user != package.provider and request.user.role != 'admin':
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
-            
-        serializer = PackageSerializer(package, data=request.data, partial=True)
+
+        serializer = PackageSerializer(package, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -842,7 +842,7 @@ class TourGuideListView(APIView):
         dest_id = request.query_params.get('destination')
         if dest_id:
             qs = qs.filter(destinations__id=dest_id).distinct()
-        serializer = TourGuideProfileSerializer(qs, many=True)
+        serializer = TourGuideProfileSerializer(qs, many=True, context={'request': request})
         return Response(serializer.data)
 
 

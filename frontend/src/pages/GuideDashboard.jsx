@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { guideService, guideBookingService, destinationService } from '@/services/api';
+import { createObjectPreview, getCloudinaryUploadEnabled, uploadImageToCloudinary } from '@/services/cloudinary';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,8 @@ export default function GuideDashboard({ onNavigate }) {
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [profileImageFile, setProfileImageFile] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState('');
 
   const [form, setForm] = useState({
     headline: '',
@@ -58,9 +61,13 @@ export default function GuideDashboard({ onNavigate }) {
           image: pRes.data.image || '',
           destination_ids: (pRes.data.destinations || []).map((d) => d.id),
         });
+        setProfileImagePreview(pRes.data.image || '');
+        setProfileImageFile(null);
       } catch {
         setProfile(null);
         setHasProfile(false);
+        setProfileImagePreview('');
+        setProfileImageFile(null);
       }
     } catch (e) {
       console.error(e);
@@ -103,6 +110,23 @@ export default function GuideDashboard({ onNavigate }) {
     destination_ids: form.destination_ids,
   });
 
+  const handleProfileImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      window.alert('Choose a valid image file.');
+      event.target.value = '';
+      return;
+    }
+
+    if (profileImagePreview && profileImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(profileImagePreview);
+    }
+
+    setProfileImageFile(file);
+    setProfileImagePreview(createObjectPreview(file));
+  };
+
   const handleSaveProfile = async () => {
     if (!form.daily_rate || toMoneyNumber(form.daily_rate) <= 0) {
       window.alert('Set a valid daily rate (NPR).');
@@ -110,10 +134,14 @@ export default function GuideDashboard({ onNavigate }) {
     }
     setSaving(true);
     try {
+      const payload = buildPayload();
+      if (profileImageFile) {
+        payload.image = await uploadImageToCloudinary(profileImageFile, 'nepal-tourism/guides');
+      }
       if (hasProfile) {
-        await guideService.updateMyProfile(buildPayload());
+        await guideService.updateMyProfile(payload);
       } else {
-        await guideService.createMyProfile(buildPayload());
+        await guideService.createMyProfile(payload);
         setHasProfile(true);
       }
       notifyAppDataChanged();
@@ -223,6 +251,26 @@ export default function GuideDashboard({ onNavigate }) {
               />
             </div>
             <div>
+              <Label>Profile image</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={handleProfileImageChange}
+              />
+              {profileImagePreview && (
+                <img
+                  src={profileImagePreview}
+                  alt="Guide profile preview"
+                  className="mt-3 h-32 w-full rounded-md object-cover border border-slate-200"
+                />
+              )}
+              <p className="mt-2 text-xs text-slate-500">
+                {getCloudinaryUploadEnabled()
+                  ? 'Choose a file to upload to Cloudinary, or leave it empty and use an image URL below.'
+                  : 'Cloudinary env vars are missing, so file upload is disabled. Use the image URL field below.'}
+              </p>
+            </div>
+            <div>
               <Label>Profile image URL</Label>
               <Input
                 value={form.image}
@@ -259,7 +307,7 @@ export default function GuideDashboard({ onNavigate }) {
                 ))}
               </div>
             </div>
-            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={handleSaveProfile} disabled={saving}>
+            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={handleSaveProfile} disabled={saving || (profileImageFile && !getCloudinaryUploadEnabled())}>
               <Save className="h-4 w-4" />
               {saving ? 'Saving…' : hasProfile ? 'Update profile' : 'Publish profile'}
             </Button>
