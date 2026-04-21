@@ -158,9 +158,9 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
                 console.log('Khalti payment initiation successful:', paymentResponse);
                 
                 if (paymentResponse.payment_url) {
-                    console.log('Opening Khalti payment window:', paymentResponse.payment_url);
-                    await khaltiService.openPaymentWindow(paymentResponse.payment_url);
-                    setStep(STEPS.CONFIRM);
+                    console.log('Redirecting to Khalti payment page:', paymentResponse.payment_url);
+                    window.location.href = paymentResponse.payment_url;
+                    return;
                 } else {
                     setError('Invalid payment response received.');
                 }
