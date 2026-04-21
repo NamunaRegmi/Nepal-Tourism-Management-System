@@ -156,11 +156,11 @@ const Home = ({ onNavigate, onSelectDestination }) => {
                 Explore Destinations
               </button>
               <button 
-                onClick={() => onNavigate('destination-results')} 
+                onClick={() => onNavigate('tours')} 
                 className="bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-bold py-4 px-12 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-2xl border-2 border-white/20"
               >
                 <MapPin className="inline-block w-5 h-5 mr-2" />
-                Plan Your Trip
+                View Tours
               </button>
             </div>
 

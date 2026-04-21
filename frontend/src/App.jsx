@@ -3,9 +3,11 @@ import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Home from './pages/home';
 
+const About = lazy(() => import('./pages/About'));
 const UserDashboard = lazy(() => import('./pages/userDashboard'));
 const AdminDashboard = lazy(() => import('./pages/adminDashboard'));
 const ProviderDashboard = lazy(() => import('./pages/providerDashboard'));
+const Tours = lazy(() => import('./pages/Tours'));
 const Guides = lazy(() => import('./pages/Guides'));
 const GuideDetail = lazy(() => import('./pages/GuideDetail'));
 const GuideDashboard = lazy(() => import('./pages/GuideDashboard'));
@@ -120,6 +122,10 @@ export default function App() {
           onNavigate={handleNavigate} 
           onSelectDestination={openDestination}
         />;
+      case 'tours':
+        return <Tours onNavigate={handleNavigate} />;
+      case 'about':
+        return <About onNavigate={handleNavigate} />;
       case 'destination-detail':
         return <DestinationDetail 
           destinationId={selectedDestination} 
