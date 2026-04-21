@@ -130,3 +130,10 @@ class KhaltiPaymentGateway:
                 'error': True,
                 'message': f'Payment verification error: {str(e)}'
             }
+
+    def get_payment_status(self, pidx):
+        """
+        Khalti ePayment lookup uses the same API for verification and status checks.
+        Keep a separate method so the view contract remains explicit.
+        """
+        return self.verify_payment(pidx)
