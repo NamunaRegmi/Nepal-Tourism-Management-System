@@ -1058,7 +1058,7 @@ class KhaltiPaymentInitiateView(APIView):
     def post(self, request):
         try:
             booking_id = request.data.get('booking_id')
-            return_url = request.data.get('return_url', 'http://localhost:3000/payment/verify')
+            return_url = request.data.get('return_url', getattr(settings, 'KHALTI_RETURN_URL', 'http://localhost:5173/payment/verify'))
             
             if not booking_id:
                 return Response({'error': 'Booking ID is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1263,8 +1263,8 @@ class EsewaPaymentInitiateView(APIView):
     def post(self, request):
         try:
             booking_id = request.data.get('booking_id')
-            success_url = request.data.get('success_url', 'http://localhost:3000/payment/esewa/success')
-            failure_url = request.data.get('failure_url', 'http://localhost:3000/payment/esewa/failure')
+            success_url = request.data.get('success_url', getattr(settings, 'ESEWA_SUCCESS_URL', 'http://localhost:5173/payment/esewa/success'))
+            failure_url = request.data.get('failure_url', getattr(settings, 'ESEWA_FAILURE_URL', 'http://localhost:5173/payment/esewa/failure'))
             
             if not booking_id:
                 return Response({'error': 'Booking ID is required'}, status=status.HTTP_400_BAD_REQUEST)

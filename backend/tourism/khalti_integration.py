@@ -13,8 +13,8 @@ class KhaltiPaymentGateway:
     def __init__(self):
         # Khalti Test Credentials from documentation
         self.secret_key = getattr(settings, 'KHALTI_SECRET_KEY', 'test_secret_key_f59e8b7d18b4499ca40f68195a846e9b')
-        self.website_url = getattr(settings, 'KHALTI_WEBSITE_URL', 'http://localhost:3000')
-        self.return_url = getattr(settings, 'KHALTI_RETURN_URL', 'http://localhost:3000/payment/verify')
+        self.website_url = getattr(settings, 'KHALTI_WEBSITE_URL', 'http://localhost:5173')
+        self.return_url = getattr(settings, 'KHALTI_RETURN_URL', 'http://localhost:5173/payment/verify')
         
         # API endpoints from Khalti documentation
         self.initiate_url = 'https://dev.khalti.com/api/v2/epayment/initiate/'

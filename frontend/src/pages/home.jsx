@@ -328,9 +328,15 @@ const Home = ({ onNavigate, onSelectDestination }) => {
               © 2026 Nepal Tourism Management System. All rights reserved. | Privacy Policy | Terms of Service | Contact Us
             </p>
             <div className="flex justify-center gap-6 text-sm">
-              <a href="#" className="hover:text-blue-200 transition-colors text-white">About Us</a>
-              <a href="#" className="hover:text-blue-200 transition-colors text-white">Support</a>
-              <a href="#" className="hover:text-blue-200 transition-colors text-white">Partners</a>
+              <button type="button" onClick={() => onNavigate('about')} className="hover:text-blue-200 transition-colors text-white">
+                About Us
+              </button>
+              <button type="button" onClick={() => onNavigate('about')} className="hover:text-blue-200 transition-colors text-white">
+                Support
+              </button>
+              <button type="button" onClick={() => onNavigate('tours')} className="hover:text-blue-200 transition-colors text-white">
+                Partners
+              </button>
             </div>
           </div>
         </div>

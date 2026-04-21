@@ -177,17 +177,19 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = 'namunaregmi0403@gmail.com'
 
+FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'http://localhost:5173').rstrip('/')
+
 # Khalti Payment Settings
 KHALTI_SECRET_KEY = os.getenv('KHALTI_SECRET_KEY', 'test_secret_key_f59e8b7d18b4499ca40f68195a846e9b')
 KHALTI_PUBLIC_KEY = os.getenv('KHALTI_PUBLIC_KEY', 'test_public_key_dc7127a0d5e049b19331a7949389e5b8')
 KHALTI_MERCHANT_ID = os.getenv('KHALTI_MERCHANT_ID', 'TEST_MERCHANT_ID')
-KHALTI_WEBSITE_URL = os.getenv('KHALTI_WEBSITE_URL', 'http://localhost:3000')
-KHALTI_RETURN_URL = os.getenv('KHALTI_RETURN_URL', 'http://localhost:3000/payment/verify')
+KHALTI_WEBSITE_URL = os.getenv('KHALTI_WEBSITE_URL', FRONTEND_BASE_URL)
+KHALTI_RETURN_URL = os.getenv('KHALTI_RETURN_URL', f'{FRONTEND_BASE_URL}/payment/verify')
 
 # eSewa Payment Settings (Sandbox)
 ESEWA_MERCHANT_ID = os.getenv('ESEWA_MERCHANT_ID', 'EPAYTEST')
 ESEWA_MERCHANT_SECRET = os.getenv('ESEWA_MERCHANT_SECRET', '8gBm/:&EnhH.1/q')
-ESEWA_SUCCESS_URL = os.getenv('ESEWA_SUCCESS_URL', 'http://localhost:3000/payment/esewa/success')
-ESEWA_FAILURE_URL = os.getenv('ESEWA_FAILURE_URL', 'http://localhost:3000/payment/esewa/failure')
+ESEWA_SUCCESS_URL = os.getenv('ESEWA_SUCCESS_URL', f'{FRONTEND_BASE_URL}/payment/esewa/success')
+ESEWA_FAILURE_URL = os.getenv('ESEWA_FAILURE_URL', f'{FRONTEND_BASE_URL}/payment/esewa/failure')
 
 AUTH_USER_MODEL = 'tourism.User'
