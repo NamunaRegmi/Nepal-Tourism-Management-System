@@ -632,6 +632,8 @@ class RoomListView(APIView):
         serializer = RoomSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(hotel=hotel)
+            hotel.total_rooms = hotel.rooms.count()
+            hotel.save(update_fields=['total_rooms'])
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -679,8 +681,11 @@ class RoomDetailView(APIView):
             
         if request.user != room.hotel.provider and request.user.role != 'admin':
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
-            
+        
+        hotel = room.hotel
         room.delete()
+        hotel.total_rooms = hotel.rooms.count()
+        hotel.save(update_fields=['total_rooms'])
         return Response({'message': 'Room deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
 
 

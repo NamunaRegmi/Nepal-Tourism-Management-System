@@ -22,6 +22,10 @@ function getBookingType(booking) {
   return 'Booking';
 }
 
+function getRoomBookingImage(booking) {
+  return booking.room_details?.image_url || booking.room_details?.image || '';
+}
+
 function getProfileDisplayName(user, profileForm = {}) {
   const firstName = profileForm.first_name || user?.first_name || '';
   const lastName = profileForm.last_name || user?.last_name || '';
@@ -638,10 +642,24 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                               <div className="grid gap-4">
                                 {bookings.map((booking) => (
                                   <div key={booking.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                    {getRoomBookingImage(booking) && (
+                                      <div className="mb-4 overflow-hidden rounded-2xl">
+                                        <img
+                                          src={getRoomBookingImage(booking)}
+                                          alt={getBookingTitle(booking)}
+                                          className="h-44 w-full object-cover"
+                                        />
+                                      </div>
+                                    )}
                                     <div className="flex items-center justify-between gap-4">
                                       <div>
                                         <p className="text-sm text-slate-500">{getBookingType(booking)}</p>
                                         <p className="mt-1 text-lg font-semibold text-slate-900">{getBookingTitle(booking)}</p>
+                                        {booking.room_details?.room_type && (
+                                          <p className="mt-1 text-sm text-slate-600">
+                                            {booking.room_details.room_type} at {booking.room_details.hotel_name}
+                                          </p>
+                                        )}
                                       </div>
                                       <Badge variant={booking.status === 'confirmed' ? 'success' : booking.status === 'pending' ? 'secondary' : 'destructive'}>
                                         {booking.status}
@@ -651,7 +669,14 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                                       <div><strong>Start:</strong> {booking.start_date}</div>
                                       {booking.end_date && <div><strong>End:</strong> {booking.end_date}</div>}
                                       <div><strong>Total:</strong> {booking.total_price}</div>
+                                      {booking.room_details?.capacity && <div><strong>Guests:</strong> {booking.room_details.capacity}</div>}
+                                      {booking.payment_status && <div><strong>Payment:</strong> {booking.payment_status}</div>}
                                     </div>
+                                    {booking.room_details?.description && (
+                                      <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                                        {booking.room_details.description}
+                                      </p>
+                                    )}
                                     {booking.status !== 'cancelled' && (
                                       <div className="mt-4">
                                         <Button
