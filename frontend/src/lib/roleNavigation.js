@@ -39,8 +39,6 @@ export function getNavLinksForRole(role) {
         { label: 'Explore', key: 'destination-results' },
         { label: 'Packages', key: 'tours' },
         { label: 'Tour Guides', key: 'guides' },
-        { label: 'My Bookings', key: 'user-bookings' },
-        { label: 'Wishlist', key: 'user-wishlist' },
         { label: 'Profile', key: 'user-profile' },
       ];
     case 'provider':
