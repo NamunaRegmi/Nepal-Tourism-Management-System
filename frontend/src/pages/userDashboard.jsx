@@ -12,6 +12,16 @@ import { createObjectPreview, getCloudinaryUploadEnabled, uploadImageToCloudinar
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 import { toast } from 'react-hot-toast';
 
+function getBookingTitle(booking) {
+  return booking.package_details?.name || booking.room_details?.hotel_name || 'Booking';
+}
+
+function getBookingType(booking) {
+  if (booking.package_details) return 'Package booking';
+  if (booking.room_details) return 'Room booking';
+  return 'Booking';
+}
+
 const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) => {
   const [user, setUser] = useState(null);
   const [destinations, setDestinations] = useState([]);
@@ -490,11 +500,9 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                     <CardHeader className="flex justify-between items-start py-4">
                       <div>
                         <CardTitle className="text-lg">
-                          {booking.package?.name || booking.room?.hotel?.name || 'Booking'}
+                          {getBookingTitle(booking)}
                         </CardTitle>
-                        <CardDescription>
-                          {booking.room ? 'Room booking' : booking.package ? 'Package booking' : ''}
-                        </CardDescription>
+                        <CardDescription>{getBookingType(booking)}</CardDescription>
                       </div>
                       <Badge
                         variant={
@@ -702,11 +710,11 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                         ) : (
                           <div className="grid gap-4">
                             {bookings.map((booking) => (
-                              <div key={booking.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="flex items-center justify-between gap-4">
-                                  <div>
-                                    <p className="text-sm text-slate-500">{booking.package?.name ? 'Package booking' : 'Room booking'}</p>
-                                    <p className="mt-1 text-lg font-semibold text-slate-900">{booking.package?.name || booking.room?.hotel?.name || 'Booking'}</p>
+                                <div key={booking.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <div>
+                                    <p className="text-sm text-slate-500">{getBookingType(booking)}</p>
+                                    <p className="mt-1 text-lg font-semibold text-slate-900">{getBookingTitle(booking)}</p>
                                   </div>
                                   <Badge variant={booking.status === 'confirmed' ? 'success' : booking.status === 'pending' ? 'secondary' : 'destructive'}>
                                     {booking.status}
@@ -732,7 +740,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                               {bookings.slice(0, 3).map((booking) => (
                                 <div key={`act-booking-${booking.id}`} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                                   <p className="text-sm text-slate-500">Booking activity</p>
-                                  <p className="mt-1 text-base font-semibold text-slate-900">{booking.package?.name || booking.room?.hotel?.name || 'Booking'}</p>
+                                  <p className="mt-1 text-base font-semibold text-slate-900">{getBookingTitle(booking)}</p>
                                   <p className="mt-2 text-sm text-slate-600">Status: {booking.status} · {booking.start_date}</p>
                                 </div>
                               ))}

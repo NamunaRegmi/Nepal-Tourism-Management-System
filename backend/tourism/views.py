@@ -715,11 +715,11 @@ class BookingListView(APIView):
         else:  # Admin
             bookings = base.all()
 
-        serializer = BookingSerializer(bookings, many=True)
+        serializer = BookingSerializer(bookings, many=True, context={'request': request})
         return Response(serializer.data)
         
     def post(self, request):
-        serializer = BookingSerializer(data=request.data)
+        serializer = BookingSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -749,7 +749,7 @@ class BookingDetailView(APIView):
         booking = self.get_object(pk, request.user)
         if not booking:
             return Response({'error': 'Booking not found or permission denied'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = BookingSerializer(booking)
+        serializer = BookingSerializer(booking, context={'request': request})
         return Response(serializer.data)
         
     def put(self, request, pk):
@@ -763,7 +763,7 @@ class BookingDetailView(APIView):
             if request.user.role == 'user' and status_update not in ['cancelled']:
                 return Response({'error': 'Users can only cancel bookings'}, status=status.HTTP_403_FORBIDDEN)
         
-        serializer = BookingSerializer(booking, data=request.data, partial=True)
+        serializer = BookingSerializer(booking, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

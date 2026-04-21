@@ -611,8 +611,11 @@ const ProviderDashboard = ({ onNavigate }) => {
                             <div>
                               <p className="font-medium text-gray-900">Booking #{booking.id}</p>
                               <p className="text-sm text-gray-500">{booking.start_date}</p>
-                              {booking.room?.room_type && (
-                                <p className="text-sm text-gray-600">Room: {booking.room.room_type}</p>
+                              {booking.room_details?.room_type && (
+                                <p className="text-sm text-gray-600">Room: {booking.room_details.room_type}</p>
+                              )}
+                              {booking.package_details?.name && (
+                                <p className="text-sm text-gray-600">Package: {booking.package_details.name}</p>
                               )}
                             </div>
                           </div>
