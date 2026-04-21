@@ -13,6 +13,7 @@ import { bookingService, hotelService, destinationService, authService } from '@
 import { createObjectPreview, getCloudinaryUploadEnabled, uploadImageToCloudinary } from '@/services/cloudinary';
 import { cn } from '@/lib/utils';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
+import RoomManager from '@/components/RoomManager';
 
 const DEFAULT_HOTEL_IMAGE = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800';
 
@@ -63,6 +64,7 @@ const ProviderDashboard = ({ onNavigate }) => {
   const [hotelImagePreview, setHotelImagePreview] = useState('');
   const [savingHotel, setSavingHotel] = useState(false);
   const [hotelDialogOpen, setHotelDialogOpen] = useState(false);
+  const [selectedHotelForRooms, setSelectedHotelForRooms] = useState(null);
 
   // Stats data
   const [stats, setStats] = useState({
@@ -213,10 +215,13 @@ const ProviderDashboard = ({ onNavigate }) => {
         amenities: hotelForm.amenities,
         image: imageUrl || DEFAULT_HOTEL_IMAGE,
       };
+      let savedHotel = null;
       if (isAddingHotel) {
-        await hotelService.create(payload);
+        const response = await hotelService.create(payload);
+        savedHotel = response.data;
       } else if (editingHotel) {
-        await hotelService.update(editingHotel.id, payload);
+        const response = await hotelService.update(editingHotel.id, payload);
+        savedHotel = response.data;
       }
 
       if (hotelImagePreview && hotelImagePreview.startsWith('blob:')) {
@@ -226,6 +231,9 @@ const ProviderDashboard = ({ onNavigate }) => {
       setHotelImagePreview('');
       setHotelDialogOpen(false);
       notifyAppDataChanged();
+      if (isAddingHotel && savedHotel?.id) {
+        setSelectedHotelForRooms(savedHotel);
+      }
     } catch (error) {
       console.error('Failed to save hotel:', error);
       window.alert(error.response?.data ? JSON.stringify(error.response.data) : (error.message || 'Could not save property. Check required fields and API.'));
@@ -325,6 +333,20 @@ const ProviderDashboard = ({ onNavigate }) => {
 
   const isMyHotel = (hotel) =>
     user?.id != null && Number(hotel.provider) === Number(user.id);
+
+  if (selectedHotelForRooms) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <RoomManager
+          hotel={selectedHotelForRooms}
+          onClose={() => {
+            setSelectedHotelForRooms(null);
+            fetchData();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -588,6 +610,23 @@ const ProviderDashboard = ({ onNavigate }) => {
                                 <span className="text-sm text-gray-500">{hotel.address}</span>
                                 <span className="font-semibold text-green-600">Rs. {hotel.price_per_night}/night</span>
                               </div>
+                              <div className="flex items-center justify-between text-sm text-slate-500">
+                                <span>{Array.isArray(hotel.rooms) ? hotel.rooms.length : hotel.total_rooms || 0} room option(s)</span>
+                                {isMyHotel(hotel) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSelectedHotelForRooms(hotel)}
+                                  >
+                                    Manage Rooms
+                                  </Button>
+                                )}
+                              </div>
+                              {isMyHotel(hotel) && Array.isArray(hotel.rooms) && hotel.rooms.length === 0 && (
+                                <p className="text-xs text-amber-700">
+                                  No rooms added yet. Add at least one room so travelers can book this property.
+                                </p>
+                              )}
                             </div>
                           </CardContent>
                         </Card>
@@ -825,6 +864,10 @@ const ProviderDashboard = ({ onNavigate }) => {
                 onChange={(e) => setHotelForm({...hotelForm, amenities: e.target.value})}
                 placeholder="WiFi, Parking, Restaurant, etc."
               />
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              Room details are added after the property is saved. Once you save this property, you can open
+              `Manage Rooms` and add room types, prices, capacity, description, and images.
             </div>
           </div>
           <DialogFooter>
