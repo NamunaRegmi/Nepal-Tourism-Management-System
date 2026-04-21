@@ -56,7 +56,6 @@ const ProviderDashboard = ({ onNavigate }) => {
     description: '',
     price_per_night: '',
     address: '',
-    type: 'hotel',
     image: '',
     amenities: ''
   });
@@ -144,7 +143,6 @@ const ProviderDashboard = ({ onNavigate }) => {
       description: '',
       price_per_night: '',
       address: '',
-      type: 'hotel',
       image: '',
       amenities: ''
     });
@@ -162,7 +160,6 @@ const ProviderDashboard = ({ onNavigate }) => {
       description: hotel.description || '',
       price_per_night: hotel.price_per_night || '',
       address: hotel.address || '',
-      type: hotel.type || 'hotel',
       image: hotel.image || '',
       amenities: hotel.amenities || ''
     });
@@ -191,6 +188,16 @@ const ProviderDashboard = ({ onNavigate }) => {
   };
 
   const handleSaveHotel = async () => {
+    if (!hotelForm.name.trim() || !hotelForm.destination_id || !hotelForm.description.trim()) {
+      window.alert('Fill in the property name, destination, and description before saving.');
+      return;
+    }
+
+    if (!hotelForm.price_per_night || Number(hotelForm.price_per_night) <= 0) {
+      window.alert('Enter a valid price per night.');
+      return;
+    }
+
     setSavingHotel(true);
     try {
       let imageUrl = (hotelForm.image && String(hotelForm.image).trim()) || '';
@@ -198,7 +205,12 @@ const ProviderDashboard = ({ onNavigate }) => {
         imageUrl = await uploadImageToCloudinary(hotelImageFile, 'nepal-tourism/hotels');
       }
       const payload = {
-        ...hotelForm,
+        name: hotelForm.name.trim(),
+        destination_id: hotelForm.destination_id,
+        description: hotelForm.description.trim(),
+        price_per_night: hotelForm.price_per_night,
+        address: hotelForm.address.trim(),
+        amenities: hotelForm.amenities,
         image: imageUrl || DEFAULT_HOTEL_IMAGE,
       };
       if (isAddingHotel) {
@@ -819,7 +831,7 @@ const ProviderDashboard = ({ onNavigate }) => {
             <Button variant="outline" onClick={() => setHotelDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveHotel} disabled={!hotelForm.name || !hotelForm.destination_id || savingHotel || (hotelImageFile && !getCloudinaryUploadEnabled())}>
+            <Button onClick={handleSaveHotel} disabled={!hotelForm.name.trim() || !hotelForm.destination_id || !hotelForm.description.trim() || !hotelForm.price_per_night || savingHotel || (hotelImageFile && !getCloudinaryUploadEnabled())}>
               <Save className="h-4 w-4 mr-2" />
               {savingHotel ? 'Saving…' : isAddingHotel ? 'Add Property' : 'Update Property'}
             </Button>

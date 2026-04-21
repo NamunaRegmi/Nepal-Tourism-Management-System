@@ -31,20 +31,40 @@ export default function Navbar({ currentPage, onNavigate }) {
     onNavigate('home');
   };
 
+  const isNavActive = (key) => {
+    if (key === 'destination-results') {
+      return ['destination-results', 'destination-detail'].includes(currentPage);
+    }
+
+    if (key === 'guides') {
+      return ['guides', 'guide-detail'].includes(currentPage);
+    }
+
+    if (key === 'user-profile') {
+      return ['user-dashboard', 'user-profile', 'user-bookings', 'user-wishlist'].includes(currentPage);
+    }
+
+    return currentPage === key;
+  };
+
   const navButtonClass = (key) =>
-    `text-sm font-medium ${currentPage === key ? 'text-blue-600' : 'text-slate-700'} hover:text-blue-600`;
+    `text-sm font-medium ${isNavActive(key) ? 'text-blue-600' : 'text-slate-700'} hover:text-blue-600`;
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/80 text-slate-800 backdrop-blur shadow-sm border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onNavigate('home')}
+            className="flex items-center gap-2 text-left"
+          >
             <Mountain className="h-7 w-7 text-blue-600" />
             <div>
               <div className="text-lg font-bold text-slate-900">Nepal Tourism</div>
               <div className="text-xs text-slate-500">Explore. Book. Travel.</div>
             </div>
-          </div>
+          </button>
 
           <nav className="hidden md:flex items-center gap-6">
             {navLinks.map((link) => (
@@ -101,7 +121,7 @@ export default function Navbar({ currentPage, onNavigate }) {
                   onNavigate(link.key);
                   setMobileOpen(false);
                 }}
-                className="block w-full text-left text-sm font-medium text-slate-700 hover:text-blue-600"
+                className={`block w-full text-left text-sm font-medium ${isNavActive(link.key) ? 'text-blue-600' : 'text-slate-700'} hover:text-blue-600`}
               >
                 {link.label}
               </button>

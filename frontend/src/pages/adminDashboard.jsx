@@ -223,8 +223,20 @@ const AdminDashboard = ({ onNavigate }) => {
 
   const handleSaveProfile = async () => {
     try {
+      if (!profileForm.username.trim() || !profileForm.email.trim()) {
+        window.alert('Username and email are required.');
+        return;
+      }
+
       setSavingProfile(true);
-      const response = await authService.updateProfile(profileForm);
+      const response = await authService.updateProfile({
+        username: profileForm.username.trim(),
+        first_name: profileForm.first_name.trim(),
+        last_name: profileForm.last_name.trim(),
+        email: profileForm.email.trim(),
+        phone: profileForm.phone.trim(),
+        profile_picture: profileForm.profile_picture.trim(),
+      });
       setAdminProfile(response.data);
       setProfileForm({
         username: response.data.username || '',
@@ -920,7 +932,7 @@ const AdminDashboard = ({ onNavigate }) => {
             <Button variant="outline" onClick={() => setProfileDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveProfile} disabled={savingProfile}>
+            <Button onClick={handleSaveProfile} disabled={!profileForm.username.trim() || !profileForm.email.trim() || savingProfile}>
               {savingProfile ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
