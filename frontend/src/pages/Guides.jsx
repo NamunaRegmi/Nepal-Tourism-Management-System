@@ -80,8 +80,8 @@ export default function Guides({ onSelectGuide }) {
                 <Card key={g.id} className="overflow-hidden border-slate-200 hover:shadow-lg transition-shadow">
                   <div className="flex h-40 bg-slate-200">
                     <img
-                      src={g.image || g.user?.profile_picture || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600'}
-                      alt=""
+                      src={g.image_url || g.image || g.user?.profile_picture || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600'}
+                      alt={g.display_name || g.user?.username || 'Tour guide'}
                       className="w-full object-cover"
                     />
                   </div>

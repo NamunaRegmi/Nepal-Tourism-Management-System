@@ -76,8 +76,8 @@ export default function GuideDetail({ guideId, onNavigate }) {
         <Card className="overflow-hidden border-slate-200">
           <div className="h-56 bg-slate-200">
             <img
-              src={guide.image || guide.user?.profile_picture || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800'}
-              alt=""
+              src={guide.image_url || guide.image || guide.user?.profile_picture || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800'}
+              alt={guide.display_name || guide.user?.username || 'Tour guide'}
               className="w-full h-full object-cover"
             />
           </div>
