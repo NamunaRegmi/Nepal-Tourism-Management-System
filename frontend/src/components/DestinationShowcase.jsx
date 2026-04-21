@@ -116,17 +116,6 @@ const DestinationShowcase = ({ destinations = [], loading, onSelectDestination, 
 
             const lower = dest.name?.toLowerCase() || '';
             let flagCode = 'np';
-            let propertyText = 'properties';
-            if (lower.includes('hotel')) {
-              propertyText = 'hotels & resorts';
-            } else if (lower.includes('apartment')) {
-              propertyText = 'apartments & suites';
-            } else if (lower.includes('resort')) {
-              propertyText = 'resorts & villas';
-            } else if (lower.includes('villa')) {
-              propertyText = 'villas & cottages';
-            }
-
             if (lower.includes('bangkok') || lower.includes('thailand')) flagCode = 'th';
             if (lower.includes('delhi') || lower.includes('india')) flagCode = 'in';
 
@@ -181,17 +170,6 @@ const DestinationShowcase = ({ destinations = [], loading, onSelectDestination, 
 
           <div ref={plannerScrollRef} className="flex gap-4 overflow-x-auto pb-6 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {currentPlannerDestinations.map((dest, i) => {
-              const lower = dest.name?.toLowerCase() || '';
-              let propertyText = 'properties';
-              if (lower.includes('hotel')) {
-                propertyText = 'hotels & resorts';
-              } else if (lower.includes('apartment')) {
-                propertyText = 'apartments & suites';
-              } else if (lower.includes('resort')) {
-                propertyText = 'resorts & villas';
-              } else if (lower.includes('villa')) {
-                propertyText = 'villas & cottages';
-              }
               return (
                 <div key={i} className="min-w-[180px] md:min-w-[220px] lg:min-w-[240px] snap-start cursor-pointer group/card" onClick={() => onSelectDestination && onSelectDestination(getDestinationIdByName(dest.name))}>
                   <div className="w-full h-40 md:h-48 rounded-2xl overflow-hidden mb-4">

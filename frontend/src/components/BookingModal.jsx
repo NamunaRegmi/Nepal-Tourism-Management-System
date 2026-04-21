@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -26,10 +26,6 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
     const [error, setError] = useState('');
     const [bookingId, setBookingId] = useState(null);
     const [paymentMethod, setPaymentMethod] = useState('khalti');
-
-    // Use a key to force remount when modal closes/opens
-    // This is simpler than trying to manage state resets
-    const modalKey = isOpen ? 'open' : 'closed';
 
     useEffect(() => {
         if (hotel && isOpen && rooms.length === 0 && !roomsLoading) {
@@ -117,6 +113,7 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
             });
             console.log('Booking created:', response.data);
             const newBookingId = response.data.id;
+            setBookingId(newBookingId);
             notifyAppDataChanged();
             
             if (skipPayment) {

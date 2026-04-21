@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Mountain, Menu, X, User, LogOut, Home, Compass, MessageCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Mountain, Menu, X, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const navLinks = [
   { label: 'Home', key: 'home' },
@@ -12,26 +11,21 @@ const navLinks = [
 
 export default function Navbar({ currentPage, onNavigate }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [user, setUser] = useState(null);
+  const stored = localStorage.getItem('user');
+  let user = null;
 
-  useEffect(() => {
-    const stored = localStorage.getItem('user');
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        setUser(null);
-      }
-    } else {
-      setUser(null);
+  if (stored) {
+    try {
+      user = JSON.parse(stored);
+    } catch {
+      user = null;
     }
-  }, [currentPage]);
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
-    setUser(null);
     onNavigate('home');
   };
 

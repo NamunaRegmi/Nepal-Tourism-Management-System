@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { guideService, destinationService } from '@/services/api';
 import { useAppDataSync } from '@/lib/dataSync';
 
-export default function Guides({ onNavigate, onSelectGuide }) {
+export default function Guides({ onSelectGuide }) {
   const [guides, setGuides] = useState([]);
   const [destinations, setDestinations] = useState([]);
   const [filterDest, setFilterDest] = useState('');

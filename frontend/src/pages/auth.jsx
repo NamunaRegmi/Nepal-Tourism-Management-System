@@ -327,13 +327,13 @@ const Auth = ({ onNavigate }) => {
                         return;
                       }
                       try {
-                        const response = await axios.post('http://127.0.0.1:8000/api/auth/forgot-password/', {
+                        await axios.post('http://127.0.0.1:8000/api/auth/forgot-password/', {
                           email: formData.email
                         });
                         alert('Password reset email sent! Check your inbox.');
                         setShowForgotPassword(false);
                         setError('');
-                      } catch (err) {
+                      } catch {
                         setError('Failed to send reset link');
                       }
                     }}

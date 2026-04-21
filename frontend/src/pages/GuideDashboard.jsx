@@ -17,7 +17,6 @@ function toMoneyNumber(value) {
 }
 
 export default function GuideDashboard({ onNavigate }) {
-  const [profile, setProfile] = useState(null);
   const [hasProfile, setHasProfile] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [destinations, setDestinations] = useState([]);
@@ -49,7 +48,6 @@ export default function GuideDashboard({ onNavigate }) {
 
       try {
         const pRes = await guideService.getMyProfile();
-        setProfile(pRes.data);
         setHasProfile(true);
         setForm({
           headline: pRes.data.headline || '',
@@ -64,7 +62,6 @@ export default function GuideDashboard({ onNavigate }) {
         setProfileImagePreview(pRes.data.image || '');
         setProfileImageFile(null);
       } catch {
-        setProfile(null);
         setHasProfile(false);
         setProfileImagePreview('');
         setProfileImageFile(null);

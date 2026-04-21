@@ -30,7 +30,10 @@ export function notifyAppDataChanged() {
 export function useAppDataSync(refetch) {
   const refetchRef = useRef(refetch);
   const debounceRef = useRef(null);
-  refetchRef.current = refetch;
+
+  useEffect(() => {
+    refetchRef.current = refetch;
+  }, [refetch]);
 
   useEffect(() => {
     const schedule = () => {

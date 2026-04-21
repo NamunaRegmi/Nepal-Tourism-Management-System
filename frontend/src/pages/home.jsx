@@ -12,8 +12,6 @@ const Home = ({ onNavigate, onSelectDestination }) => {
   const [destinations, setDestinations] = useState([]);
   const [allDestinations, setAllDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchLocation, setSearchLocation] = useState('');
   const [searchDate, setSearchDate] = useState('');
   const [searchType, setSearchType] = useState('');
@@ -74,7 +72,6 @@ const Home = ({ onNavigate, onSelectDestination }) => {
     const query = searchLocation || searchDate || searchType;
     if (!query.trim()) {
       setDestinations(allDestinations);
-      setShowSuggestions(false);
       return;
     }
     const lowerQuery = query.toLowerCase();
@@ -83,8 +80,6 @@ const Home = ({ onNavigate, onSelectDestination }) => {
       d.description?.toLowerCase().includes(lowerQuery) ||
       d.location?.toLowerCase().includes(lowerQuery)
     );
-    
-    setShowSuggestions(false);
     
     if (filtered.length > 0) {
       setDestinations(filtered);
@@ -97,11 +92,6 @@ const Home = ({ onNavigate, onSelectDestination }) => {
     }
   };
 
-  const suggestions = searchQuery.trim() 
-    ? allDestinations.filter(d => d.name?.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5)
-    : [];
-
-  const currentPlannerDestinations = destinations.slice(0, 6);
   const propertyTypes = [
     {
       id: 'hotels',
