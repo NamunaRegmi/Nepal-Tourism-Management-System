@@ -40,8 +40,106 @@ function getBrowserLocation() {
   };
 }
 
+function normalizePath(pathname) {
+  return pathname.replace(/\/+$/, '') || '/';
+}
+
+function getPathForPage(page, options = {}) {
+  switch (page) {
+    case 'home':
+      return '/';
+    case 'user-dashboard':
+      return '/dashboard';
+    case 'user-profile':
+      return '/profile';
+    case 'user-bookings':
+      return '/profile/bookings';
+    case 'user-wishlist':
+      return '/profile/saved';
+    case 'destination-results':
+      return '/destinations';
+    case 'destination-detail':
+      return options.destinationId ? `/destinations/${options.destinationId}` : '/destinations';
+    case 'tours':
+      return '/tours';
+    case 'about':
+      return '/about';
+    case 'admin-dashboard':
+      return '/admin/dashboard';
+    case 'provider-dashboard':
+      return '/provider/dashboard';
+    case 'guides':
+      return '/guides';
+    case 'guide-detail':
+      return options.guideId ? `/guides/${options.guideId}` : '/guides';
+    case 'guide-dashboard':
+      return '/guide/dashboard';
+    default:
+      return '/';
+  }
+}
+
+function getRouteState(pathname, fallbackPage) {
+  if (
+    pathname.startsWith('/payment') ||
+    pathname.startsWith('/reset-password')
+  ) {
+    return null;
+  }
+
+  const cleanPath = normalizePath(pathname);
+  const destinationDetailMatch = cleanPath.match(/^\/destinations\/([^/]+)$/);
+  if (destinationDetailMatch) {
+    return {
+      page: 'destination-detail',
+      destinationId: destinationDetailMatch[1],
+    };
+  }
+
+  const guideDetailMatch = cleanPath.match(/^\/guides\/([^/]+)$/);
+  if (guideDetailMatch) {
+    return {
+      page: 'guide-detail',
+      guideId: guideDetailMatch[1],
+    };
+  }
+
+  switch (cleanPath) {
+    case '/':
+      return { page: fallbackPage };
+    case '/dashboard':
+      return { page: 'user-dashboard' };
+    case '/profile':
+      return { page: 'user-profile' };
+    case '/profile/bookings':
+      return { page: 'user-bookings' };
+    case '/profile/saved':
+      return { page: 'user-wishlist' };
+    case '/destinations':
+      return { page: 'destination-results' };
+    case '/tours':
+      return { page: 'tours' };
+    case '/about':
+      return { page: 'about' };
+    case '/admin/dashboard':
+      return { page: 'admin-dashboard' };
+    case '/provider/dashboard':
+      return { page: 'provider-dashboard' };
+    case '/guides':
+      return { page: 'guides' };
+    case '/guide/dashboard':
+      return { page: 'guide-dashboard' };
+    default:
+      return { page: fallbackPage };
+  }
+}
+
 export default function App() {
-  const [currentPage, setCurrentPage] = useState(() => getLandingPageForRole(getUserRole(getStoredUser())));
+  const landingPage = getLandingPageForRole(getUserRole(getStoredUser()));
+  const [currentPage, setCurrentPage] = useState(() => {
+    const routeState = getRouteState(window.location.pathname, landingPage);
+    return routeState?.page || landingPage;
+  });
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [selectedGuideId, setSelectedGuideId] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -59,43 +157,89 @@ export default function App() {
     };
   }, []);
 
-  const resetBrowserLocation = () => {
-    if (browserLocation.pathname !== '/' || browserLocation.search) {
-      window.history.pushState({}, '', '/');
+  useEffect(() => {
+    const routeState = getRouteState(browserLocation.pathname, landingPage);
+    if (!routeState) {
+      return;
+    }
+
+    setCurrentPage(routeState.page);
+
+    if (routeState.destinationId) {
+      setSelectedDestination(routeState.destinationId);
+    } else if (routeState.page !== 'destination-detail') {
+      setSelectedDestination(null);
+    }
+
+    if (routeState.guideId) {
+      setSelectedGuideId(routeState.guideId);
+    } else if (routeState.page !== 'guide-detail') {
+      setSelectedGuideId(null);
+    }
+  }, [browserLocation.pathname, landingPage]);
+
+  useEffect(() => {
+    const routeState = getRouteState(browserLocation.pathname, landingPage);
+    if (!routeState) {
+      return;
+    }
+
+    const normalizedPath = normalizePath(browserLocation.pathname);
+    const canonicalPath = getPathForPage(routeState.page, {
+      destinationId: routeState.destinationId,
+      guideId: routeState.guideId,
+    });
+
+    if (normalizedPath === canonicalPath && !browserLocation.search) {
+      return;
+    }
+
+    window.history.replaceState({}, '', canonicalPath);
+    setBrowserLocation(getBrowserLocation());
+  }, [browserLocation.pathname, browserLocation.search, landingPage]);
+
+  const syncBrowserPath = (path) => {
+    if (browserLocation.pathname !== path || browserLocation.search) {
+      window.history.pushState({}, '', path);
       setBrowserLocation(getBrowserLocation());
     }
   };
 
   const handleNavigate = (page) => {
-    resetBrowserLocation();
-
     if (page === 'auth') {
+      syncBrowserPath(getPathForPage('home'));
       setIsAuthModalOpen(true);
-    } else {
-      setCurrentPage(page);
+      return;
     }
+
+    syncBrowserPath(getPathForPage(page));
+    setCurrentPage(page);
   };
 
   const openDestination = (id) => {
     if (!id) {
       setSelectedDestination(null);
       setCurrentPage('destination-results');
+      syncBrowserPath(getPathForPage('destination-results'));
       return;
     }
 
     setSelectedDestination(id);
     setCurrentPage('destination-detail');
+    syncBrowserPath(getPathForPage('destination-detail', { destinationId: id }));
   };
 
   const openGuide = (id) => {
     if (!id) {
       setSelectedGuideId(null);
       setCurrentPage('guides');
+      syncBrowserPath(getPathForPage('guides'));
       return;
     }
 
     setSelectedGuideId(id);
     setCurrentPage('guide-detail');
+    syncBrowserPath(getPathForPage('guide-detail', { guideId: id }));
   };
 
   const renderPage = () => {

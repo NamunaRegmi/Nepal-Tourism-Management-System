@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { roomService } from '@/services/api';
 import { notifyAppDataChanged } from '@/lib/dataSync';
@@ -12,7 +13,12 @@ const RoomManager = ({ hotel, onClose }) => {
     const [rooms, setRooms] = useState([]);
     const [isAddRoomOpen, setIsAddRoomOpen] = useState(false);
     const [newRoom, setNewRoom] = useState({
-        room_type: '', price: '', capacity: '', quantity: 1, amenities: '', is_available: true
+        room_type: '',
+        price: '',
+        capacity: '',
+        description: '',
+        image: '',
+        is_available: true,
     });
 
     const fetchRooms = useCallback(async () => {
@@ -32,19 +38,40 @@ const RoomManager = ({ hotel, onClose }) => {
     }, [fetchRooms]);
 
     const handleCreateRoom = async () => {
-        if (!newRoom.room_type || !newRoom.price) {
-            alert("Please fill in required fields");
+        if (!newRoom.room_type.trim() || !newRoom.price) {
+            alert("Please fill in the required fields");
+            return;
+        }
+
+        if (Number(newRoom.price) <= 0 || Number(newRoom.capacity || 0) <= 0) {
+            alert("Price and capacity must be greater than zero");
             return;
         }
         try {
-            await roomService.create(hotel.id, newRoom);
+            const payload = {
+                room_type: newRoom.room_type.trim(),
+                price: Number(newRoom.price),
+                capacity: Number(newRoom.capacity),
+                description: newRoom.description.trim(),
+                image: newRoom.image.trim(),
+                is_available: newRoom.is_available,
+            };
+
+            await roomService.create(hotel.id, payload);
             setIsAddRoomOpen(false);
-            setNewRoom({ room_type: '', price: '', capacity: '', quantity: 1, amenities: '', is_available: true });
+            setNewRoom({
+                room_type: '',
+                price: '',
+                capacity: '',
+                description: '',
+                image: '',
+                is_available: true,
+            });
             fetchRooms();
             notifyAppDataChanged();
         } catch (err) {
             console.error("Failed to create room", err);
-            alert("Failed to create room");
+            alert(err.response?.data ? JSON.stringify(err.response.data) : "Failed to create room");
         }
     };
 
@@ -85,17 +112,21 @@ const RoomManager = ({ hotel, onClose }) => {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="price">Price ($)</Label>
-                                    <Input id="price" type="number" value={newRoom.price} onChange={e => setNewRoom({ ...newRoom, price: e.target.value })} />
+                                    <Label htmlFor="price">Price per night (Rs.)</Label>
+                                    <Input id="price" type="number" min="1" value={newRoom.price} onChange={e => setNewRoom({ ...newRoom, price: e.target.value })} />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="capacity">Capacity (Guests)</Label>
-                                    <Input id="capacity" type="number" value={newRoom.capacity} onChange={e => setNewRoom({ ...newRoom, capacity: e.target.value })} />
+                                    <Input id="capacity" type="number" min="1" value={newRoom.capacity} onChange={e => setNewRoom({ ...newRoom, capacity: e.target.value })} />
                                 </div>
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="amenities">Amenities (comma separated)</Label>
-                                <Input id="amenities" value={newRoom.amenities} onChange={e => setNewRoom({ ...newRoom, amenities: e.target.value })} />
+                                <Label htmlFor="description">Description</Label>
+                                <Textarea id="description" value={newRoom.description} onChange={e => setNewRoom({ ...newRoom, description: e.target.value })} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="room-image">Room image URL</Label>
+                                <Input id="room-image" value={newRoom.image} onChange={e => setNewRoom({ ...newRoom, image: e.target.value })} placeholder="https://example.com/room.jpg" />
                             </div>
                         </div>
                         <DialogFooter>
@@ -110,8 +141,9 @@ const RoomManager = ({ hotel, onClose }) => {
                     <Card key={room.id} className="flex justify-between items-center p-4">
                         <div>
                             <h3 className="font-bold text-lg">{room.room_type}</h3>
-                            <p className="text-sm text-gray-500">Max {room.capacity} guests • {room.amenities}</p>
-                            <p className="font-semibold text-green-600">${room.price} / night</p>
+                            <p className="text-sm text-gray-500">Max {room.capacity} guests</p>
+                            {room.description && <p className="text-sm text-gray-500 mt-1">{room.description}</p>}
+                            <p className="font-semibold text-green-600">Rs. {room.price} / night</p>
                         </div>
                         <div className="flex gap-2">
                             <Button size="icon" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => handleDeleteRoom(room.id)}>

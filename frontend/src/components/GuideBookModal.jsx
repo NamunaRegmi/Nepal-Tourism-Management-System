@@ -62,8 +62,15 @@ export default function GuideBookModal({ guide, isOpen, onClose, onSuccess }) {
       onSuccess?.();
       handleClose();
     } catch (e) {
-      const msg = e.response?.data;
-      setError(typeof msg === 'object' ? JSON.stringify(msg) : 'Could not create booking.');
+      const responseData = e.response?.data;
+      const msg =
+        responseData?.non_field_errors?.[0] ||
+        responseData?.guide_profile?.[0] ||
+        responseData?.end_date?.[0] ||
+        responseData?.detail ||
+        responseData?.error ||
+        'Could not create booking.';
+      setError(msg);
     } finally {
       setLoading(false);
     }

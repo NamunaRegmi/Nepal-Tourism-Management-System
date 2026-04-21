@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { guideService, guideBookingService, destinationService } from '@/services/api';
+import { authService, guideService, guideBookingService, destinationService } from '@/services/api';
 import { createObjectPreview, getCloudinaryUploadEnabled, uploadImageToCloudinary } from '@/services/cloudinary';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 import { cn } from '@/lib/utils';
@@ -79,10 +79,8 @@ export default function GuideDashboard({ onNavigate }) {
 
   useAppDataSync(load);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await authService.logout();
     onNavigate('home');
   };
 
@@ -99,9 +97,9 @@ export default function GuideDashboard({ onNavigate }) {
   const buildPayload = () => ({
     headline: form.headline.trim(),
     bio: form.bio.trim(),
-    languages: form.languages,
-    years_experience: parseInt(form.years_experience, 10) || 0,
-    daily_rate: form.daily_rate,
+    languages: form.languages.trim(),
+    years_experience: Math.max(parseInt(form.years_experience, 10) || 0, 0),
+    daily_rate: String(toMoneyNumber(form.daily_rate)),
     certifications: form.certifications.trim(),
     image: form.image.trim() || undefined,
     destination_ids: form.destination_ids,
@@ -125,10 +123,26 @@ export default function GuideDashboard({ onNavigate }) {
   };
 
   const handleSaveProfile = async () => {
+    if (!form.headline.trim() || !form.bio.trim()) {
+      window.alert('Fill in the headline and bio before publishing your profile.');
+      return;
+    }
+
+    if (!form.languages.trim()) {
+      window.alert('Add at least one language.');
+      return;
+    }
+
     if (!form.daily_rate || toMoneyNumber(form.daily_rate) <= 0) {
       window.alert('Set a valid daily rate (NPR).');
       return;
     }
+
+    if (form.destination_ids.length === 0) {
+      window.alert('Select at least one destination you guide in.');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = buildPayload();
@@ -304,7 +318,7 @@ export default function GuideDashboard({ onNavigate }) {
                 ))}
               </div>
             </div>
-            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={handleSaveProfile} disabled={saving || (profileImageFile && !getCloudinaryUploadEnabled())}>
+            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={handleSaveProfile} disabled={!form.headline.trim() || !form.bio.trim() || !form.languages.trim() || form.destination_ids.length === 0 || !form.daily_rate || saving || (profileImageFile && !getCloudinaryUploadEnabled())}>
               <Save className="h-4 w-4" />
               {saving ? 'Saving…' : hasProfile ? 'Update profile' : 'Publish profile'}
             </Button>

@@ -548,9 +548,24 @@ class HotelDetailView(APIView):
                     {'error': 'You can only update your own hotels'},
                     status=status.HTTP_403_FORBIDDEN
                 )
-            serializer = HotelSerializer(hotel, data=request.data, partial=True, context={'request': request})
+
+            payload = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+            dest_raw = payload.pop('destination_id', None) or payload.pop('destination', None)
+            destination = None
+            if dest_raw not in (None, ''):
+                try:
+                    destination = Destination.objects.get(pk=int(dest_raw))
+                except (ValueError, TypeError):
+                    return Response({'error': 'Invalid destination_id'}, status=status.HTTP_400_BAD_REQUEST)
+                except Destination.DoesNotExist:
+                    return Response({'error': 'Destination not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = HotelSerializer(hotel, data=payload, partial=True, context={'request': request})
             if serializer.is_valid():
-                serializer.save()
+                if destination is not None:
+                    serializer.save(destination=destination)
+                else:
+                    serializer.save()
                 return Response(serializer.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Hotel.DoesNotExist:
