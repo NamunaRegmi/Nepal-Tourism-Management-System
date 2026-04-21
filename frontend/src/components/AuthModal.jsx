@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
 import { notifyAppDataChanged } from '@/lib/dataSync';
+import { getLandingPageForRole } from '@/lib/roleNavigation';
 
 const AuthModal = ({ isOpen, onClose, onNavigate }) => {
   const [selectedRole, setSelectedRole] = useState(null);
@@ -35,18 +36,15 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
       localStorage.setItem('user', JSON.stringify(response.data.user));
       notifyAppDataChanged();
 
-      toast.success(`Welcome! Logged in as ${selectedRole}.`, {
+      const authenticatedRole = response.data.user?.role || selectedRole;
+
+      toast.success(`Welcome! Logged in as ${authenticatedRole}.`, {
         duration: 3000,
         icon: '✅',
       });
 
       onClose();
-      const userRole = selectedRole;
-      if (userRole === 'user') {
-        onNavigate('destination-results');
-      } else {
-        onNavigate(`${userRole}-dashboard`);
-      }
+      onNavigate(getLandingPageForRole(authenticatedRole));
     } catch (error) {
       console.error('Login failed:', error);
       toast.error('Google login failed. Please try again.');
@@ -100,21 +98,18 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
       localStorage.setItem('user', JSON.stringify(response.data.user));
       notifyAppDataChanged();
 
+      const authenticatedRole = response.data.user?.role || selectedRole;
+
       const message = isSignup 
-        ? `Account created successfully! Welcome as ${selectedRole}.` 
-        : `Logged in successfully as ${selectedRole}!`;
+        ? `Account created successfully! Welcome as ${authenticatedRole}.` 
+        : `Logged in successfully as ${authenticatedRole}!`;
       toast.success(message, {
         duration: 3000,
         icon: '✅',
       });
 
       onClose();
-      const userRole = selectedRole;
-      if (userRole === 'user') {
-        onNavigate('destination-results');
-      } else {
-        onNavigate(`${userRole}-dashboard`);
-      }
+      onNavigate(getLandingPageForRole(authenticatedRole));
     } catch (error) {
       const errorMsg = error.response?.data?.error || 'Authentication failed';
       toast.error(errorMsg);

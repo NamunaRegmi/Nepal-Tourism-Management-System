@@ -106,12 +106,47 @@ class EsewaService {
     form.submit();
   }
 
+  decodeCallbackPayload(encodedPayload) {
+    if (!encodedPayload) {
+      return null;
+    }
+
+    try {
+      const normalizedPayload = encodedPayload
+        .replace(/ /g, '+')
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+      const padding = '='.repeat((4 - (normalizedPayload.length % 4)) % 4);
+      const decodedPayload = atob(`${normalizedPayload}${padding}`);
+
+      return JSON.parse(decodedPayload);
+    } catch (error) {
+      console.error('Failed to decode eSewa callback payload:', error);
+      return null;
+    }
+  }
+
   /**
    * Handle payment callback from URL parameters
    * @param {URLSearchParams} searchParams - URL search parameters
    * @returns {Object} - Parsed callback data
    */
   parseCallbackParams(searchParams) {
+    const encodedPayload = searchParams.get('data');
+    const decodedPayload = this.decodeCallbackPayload(encodedPayload);
+
+    if (decodedPayload) {
+      return {
+        transaction_uuid: decodedPayload.transaction_uuid || null,
+        transaction_code: decodedPayload.transaction_code || null,
+        total_amount: decodedPayload.total_amount?.toString() || null,
+        product_code: decodedPayload.product_code || null,
+        status: decodedPayload.status || null,
+        signed_field_names: decodedPayload.signed_field_names || null,
+        signature: decodedPayload.signature || null
+      };
+    }
+
     return {
       transaction_uuid: searchParams.get('transaction_uuid'),
       transaction_code: searchParams.get('transaction_code'),

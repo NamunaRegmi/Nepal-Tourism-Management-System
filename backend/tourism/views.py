@@ -2,6 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+import base64
+import json
 from rest_framework_simplejwt.tokens import RefreshToken
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -23,6 +25,43 @@ from .serializers import (
 )
 from .khalti_integration import KhaltiPaymentGateway
 from .esewa_integration import EsewaPaymentGateway
+
+
+def parse_esewa_callback_payload(query_params):
+    encoded_payload = query_params.get('data')
+
+    if encoded_payload:
+        try:
+            normalized_payload = (
+                encoded_payload.replace(' ', '+')
+                .replace('-', '+')
+                .replace('_', '/')
+            )
+            padding = '=' * (-len(normalized_payload) % 4)
+            decoded_payload = base64.b64decode(f"{normalized_payload}{padding}").decode('utf-8')
+            payload = json.loads(decoded_payload)
+
+            return {
+                'transaction_uuid': payload.get('transaction_uuid'),
+                'transaction_code': payload.get('transaction_code'),
+                'total_amount': str(payload.get('total_amount')) if payload.get('total_amount') is not None else None,
+                'product_code': payload.get('product_code'),
+                'status': payload.get('status'),
+                'signed_field_names': payload.get('signed_field_names'),
+                'signature': payload.get('signature'),
+            }
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            print(f"Failed to decode eSewa callback payload: {exc}")
+
+    return {
+        'transaction_uuid': query_params.get('transaction_uuid'),
+        'transaction_code': query_params.get('transaction_code'),
+        'total_amount': query_params.get('total_amount'),
+        'product_code': query_params.get('product_code'),
+        'status': query_params.get('status'),
+        'signed_field_names': query_params.get('signed_field_names'),
+        'signature': query_params.get('signature'),
+    }
 
 
 class GoogleLoginView(APIView):
@@ -1326,12 +1365,12 @@ class EsewaPaymentCallbackView(APIView):
     
     def get(self, request):
         try:
-            # eSewa sends these parameters on success
-            transaction_uuid = request.GET.get('transaction_uuid')
-            transaction_code = request.GET.get('transaction_code')
-            total_amount = request.GET.get('total_amount')
-            product_code = request.GET.get('product_code')
-            status_param = request.GET.get('status')
+            callback_data = parse_esewa_callback_payload(request.GET)
+            transaction_uuid = callback_data.get('transaction_uuid')
+            transaction_code = callback_data.get('transaction_code')
+            total_amount = callback_data.get('total_amount')
+            product_code = callback_data.get('product_code')
+            status_param = callback_data.get('status')
             
             print(f"eSewa Callback: transaction_uuid={transaction_uuid}, status={status_param}")
             
