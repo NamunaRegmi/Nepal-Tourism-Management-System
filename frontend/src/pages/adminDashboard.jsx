@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Shield, Users, Building2, Package, BarChart3, TrendingUp, Calendar, DollarSign, Activity, ChevronRight, Bell, Search, Menu, X, Settings, UserCheck, UserX, Eye, Edit, Trash2, MapPin } from 'lucide-react';
+import { Shield, Users, Building2, Package, BarChart3, TrendingUp, Calendar, DollarSign, Activity, ChevronRight, Bell, Search, Menu, X, Settings, UserCheck, UserX, Eye, Edit, Trash2, MapPin, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { adminService, bookingService } from '../services/api';
+import { adminService, authService, bookingService } from '../services/api';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 
-const AdminDashboard = () => {
+const AdminDashboard = ({ onNavigate }) => {
   const [dashboardStats, setDashboardStats] = useState({
     total_users: 0,
     total_providers: 0,
@@ -32,10 +33,36 @@ const AdminDashboard = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [bookingActionLoading, setBookingActionLoading] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [adminProfile, setAdminProfile] = useState(null);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    username: '',
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    profile_picture: '',
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
+
+      const profileResponse = await authService.getProfile();
+      if (profileResponse.data) {
+        setAdminProfile(profileResponse.data);
+        setProfileForm({
+          username: profileResponse.data.username || '',
+          first_name: profileResponse.data.first_name || '',
+          last_name: profileResponse.data.last_name || '',
+          email: profileResponse.data.email || '',
+          phone: profileResponse.data.phone || '',
+          profile_picture: profileResponse.data.profile_picture || '',
+        });
+        localStorage.setItem('user', JSON.stringify(profileResponse.data));
+      }
       
       // Fetch dashboard stats
       const statsResponse = await adminService.getStats();
@@ -184,6 +211,40 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      setShowProfileDropdown(false);
+      onNavigate?.('home');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setSavingProfile(true);
+      const response = await authService.updateProfile(profileForm);
+      setAdminProfile(response.data);
+      setProfileForm({
+        username: response.data.username || '',
+        first_name: response.data.first_name || '',
+        last_name: response.data.last_name || '',
+        email: response.data.email || '',
+        phone: response.data.phone || '',
+        profile_picture: response.data.profile_picture || '',
+      });
+      localStorage.setItem('user', JSON.stringify(response.data));
+      setProfileDialogOpen(false);
+      notifyAppDataChanged();
+    } catch (error) {
+      console.error('Admin profile update failed:', error);
+      window.alert(error.response?.data ? JSON.stringify(error.response.data) : 'Could not update profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const handleBookingAction = async (action, booking) => {
     const nextStatusMap = {
       confirm: 'confirmed',
@@ -272,11 +333,40 @@ const AdminDashboard = () => {
               <Bell className="h-5 w-5" />
               <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full"></span>
             </Button>
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                A
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-8 w-8 cursor-pointer" onClick={() => setShowProfileDropdown((open) => !open)}>
+                <AvatarFallback className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                  {(adminProfile?.first_name || adminProfile?.username || 'A').charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              {showProfileDropdown && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                  <div className="px-3 py-2 border-b border-gray-100">
+                    <p className="text-sm font-semibold text-gray-900">{adminProfile?.first_name || adminProfile?.username || 'Admin'}</p>
+                    <p className="text-xs text-gray-500">{adminProfile?.email || 'admin@example.com'}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      setProfileDialogOpen(true);
+                      setShowProfileDropdown(false);
+                    }}
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Manage Profile
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-red-600"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -763,6 +853,75 @@ const AdminDashboard = () => {
             )}
             <Button variant="outline" onClick={() => setBookingDialogOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Admin Profile</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="admin-username">Username</Label>
+              <Input
+                id="admin-username"
+                value={profileForm.username}
+                onChange={(event) => setProfileForm((current) => ({ ...current, username: event.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="admin-first-name">First Name</Label>
+                <Input
+                  id="admin-first-name"
+                  value={profileForm.first_name}
+                  onChange={(event) => setProfileForm((current) => ({ ...current, first_name: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="admin-last-name">Last Name</Label>
+                <Input
+                  id="admin-last-name"
+                  value={profileForm.last_name}
+                  onChange={(event) => setProfileForm((current) => ({ ...current, last_name: event.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="admin-email">Email</Label>
+              <Input
+                id="admin-email"
+                type="email"
+                value={profileForm.email}
+                onChange={(event) => setProfileForm((current) => ({ ...current, email: event.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="admin-phone">Phone</Label>
+              <Input
+                id="admin-phone"
+                value={profileForm.phone}
+                onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="admin-picture">Profile Picture URL</Label>
+              <Input
+                id="admin-picture"
+                value={profileForm.profile_picture}
+                onChange={(event) => setProfileForm((current) => ({ ...current, profile_picture: event.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveProfile} disabled={savingProfile}>
+              {savingProfile ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
