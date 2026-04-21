@@ -7,7 +7,7 @@ import khaltiService from '../services/khaltiService';
 import esewaService from '../services/esewaService';
 import toast from 'react-hot-toast';
 
-const formatNPR = (amount) => `Rs. ${Number(amount).toLocaleString('en-NP')}`;
+const formatNPR = (amount) => `Rs. ${Number(amount || 0).toLocaleString('en-NP')}`;
 
 export default function PaymentPage({ onNavigate }) {
   // Get bookingId from URL query parameters
@@ -113,6 +113,10 @@ export default function PaymentPage({ onNavigate }) {
     );
   }
 
+  const roomDetails = booking?.room_details;
+  const packageDetails = booking?.package_details;
+  const isPackageBooking = Boolean(packageDetails);
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -146,24 +150,44 @@ export default function PaymentPage({ onNavigate }) {
                 <span className="text-gray-600">Booking ID</span>
                 <span className="font-medium">#{booking?.id}</span>
               </div>
-              {booking?.room_details && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Booking type</span>
+                <span className="font-medium">{isPackageBooking ? 'Package booking' : 'Room booking'}</span>
+              </div>
+              {roomDetails && (
                 <>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Room Type</span>
-                    <span className="font-medium">{booking.room_details.room_type}</span>
+                    <span className="font-medium">{roomDetails.room_type}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Hotel</span>
-                    <span className="font-medium">{booking.room_details.hotel_name}</span>
+                    <span className="font-medium">{roomDetails.hotel_name}</span>
+                  </div>
+                </>
+              )}
+              {packageDetails && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Package</span>
+                    <span className="font-medium">{packageDetails.name}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Provider</span>
+                    <span className="font-medium">{packageDetails.provider_name || 'Tour provider'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Duration</span>
+                    <span className="font-medium">{packageDetails.duration_days} days</span>
                   </div>
                 </>
               )}
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Check-in</span>
+                <span className="text-gray-600">{isPackageBooking ? 'Tour starts' : 'Check-in'}</span>
                 <span className="font-medium">{booking?.start_date}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Check-out</span>
+                <span className="text-gray-600">{isPackageBooking ? 'Tour ends' : 'Check-out'}</span>
                 <span className="font-medium">{booking?.end_date}</span>
               </div>
               <div className="flex justify-between font-bold text-lg border-t border-gray-300 pt-2 mt-2">

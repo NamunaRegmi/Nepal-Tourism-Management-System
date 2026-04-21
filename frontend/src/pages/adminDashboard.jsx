@@ -513,7 +513,7 @@ const AdminDashboard = () => {
                           <TableRow key={booking.id}>
                             <TableCell>{booking.id}</TableCell>
                             <TableCell>{booking.user?.username || 'N/A'}</TableCell>
-                            <TableCell>{booking.room?.room_type || booking.package?.name || 'N/A'}</TableCell>
+                            <TableCell>{booking.room_details?.room_type || booking.package_details?.name || 'N/A'}</TableCell>
                             <TableCell>Rs. {booking.total_price}</TableCell>
                             <TableCell>
                               <Badge className={

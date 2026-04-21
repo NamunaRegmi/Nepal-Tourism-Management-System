@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, MapPin, Package, Users } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import PackageBookingModal from '@/components/PackageBookingModal';
 import { packageService } from '@/services/api';
 import { useAppDataSync } from '@/lib/dataSync';
 
@@ -14,6 +16,7 @@ export default function Tours({ onNavigate }) {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedPackage, setSelectedPackage] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -35,6 +38,29 @@ export default function Tours({ onNavigate }) {
   }, [load]);
 
   useAppDataSync(load);
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const userRaw = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+  let userRole = 'guest';
+  try {
+    userRole = userRaw ? JSON.parse(userRaw).role?.toLowerCase() || 'guest' : 'guest';
+  } catch {
+    userRole = 'guest';
+  }
+
+  const handleBookPackage = (tour) => {
+    if (!token) {
+      onNavigate('auth');
+      return;
+    }
+
+    if (userRole !== 'user') {
+      toast.error('Sign in with a traveler account to book packages.');
+      return;
+    }
+
+    setSelectedPackage(tour);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -153,8 +179,8 @@ export default function Tours({ onNavigate }) {
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    <Button className="bg-slate-900 hover:bg-slate-800" onClick={() => onNavigate('auth')}>
-                      Sign in to book
+                    <Button className="bg-slate-900 hover:bg-slate-800" onClick={() => handleBookPackage(tour)}>
+                      {!token ? 'Sign in to book' : userRole === 'user' ? 'Book this package' : 'Traveler account required'}
                     </Button>
                     <Button variant="outline" onClick={() => onNavigate('destination-results')}>
                       Explore destinations
@@ -166,6 +192,12 @@ export default function Tours({ onNavigate }) {
           </div>
         )}
       </section>
+
+      <PackageBookingModal
+        tour={selectedPackage}
+        isOpen={Boolean(selectedPackage)}
+        onClose={() => setSelectedPackage(null)}
+      />
     </div>
   );
 }

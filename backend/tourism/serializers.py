@@ -11,12 +11,13 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RoomSerializer(serializers.ModelSerializer):
+    hotel_name = serializers.CharField(source='hotel.name', read_only=True)
     image_url = serializers.SerializerMethodField()
     image_file = serializers.ImageField(required=False, allow_null=True, write_only=True)
 
     class Meta:
         model = Room
-        fields = ['id', 'hotel', 'room_type', 'price', 'capacity', 'description', 'image', 'image_file', 'image_url', 'is_available']
+        fields = ['id', 'hotel', 'hotel_name', 'room_type', 'price', 'capacity', 'description', 'image', 'image_file', 'image_url', 'is_available']
         read_only_fields = ['id', 'hotel']
 
     def get_image_url(self, obj):
@@ -134,6 +135,27 @@ class BookingSerializer(serializers.ModelSerializer):
             'start_date', 'end_date', 'total_price', 'status', 'payment_status', 'payment_method', 'created_at'
         ]
         read_only_fields = ['id', 'user', 'created_at']
+
+    def validate(self, attrs):
+        room = attrs.get('room', getattr(self.instance, 'room', None))
+        package = attrs.get('package', getattr(self.instance, 'package', None))
+        start_date = attrs.get('start_date', getattr(self.instance, 'start_date', None))
+        end_date = attrs.get('end_date', getattr(self.instance, 'end_date', None))
+        request = self.context.get('request')
+
+        if not room and not package:
+            raise serializers.ValidationError({'non_field_errors': ['Choose a room or a package before booking.']})
+
+        if room and package:
+            raise serializers.ValidationError({'non_field_errors': ['A booking can only contain one item at a time.']})
+
+        if start_date and end_date and end_date < start_date:
+            raise serializers.ValidationError({'end_date': 'Must be on or after the start date.'})
+
+        if request and request.method == 'POST' and request.user.role != 'user':
+            raise serializers.ValidationError({'non_field_errors': ['Only traveler accounts can create bookings.']})
+
+        return attrs
 
 
 class DestinationMiniSerializer(serializers.ModelSerializer):
