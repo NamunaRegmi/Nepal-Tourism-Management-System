@@ -5,7 +5,7 @@ import random
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
-from tourism.models import User, Destination, Hotel, Room, Package
+from tourism.models import User, Destination, Hotel, Room, Package, TourGuideProfile
 
 def create_users():
     print("Creating users...")
@@ -18,8 +18,60 @@ def create_users():
     if _:
         admin.set_password('password123')
         admin.save()
+
+    guide_specs = [
+        {
+            "username": "regmibipul2015",
+            "email": "regmibipul2015@gmail.com",
+            "first_name": "Bipul",
+            "last_name": "Regmi",
+        },
+        {
+            "username": "pasang.guide",
+            "email": "pasang.guide@example.com",
+            "first_name": "Pasang",
+            "last_name": "Sherpa",
+        },
+        {
+            "username": "sita.guide",
+            "email": "sita.guide@example.com",
+            "first_name": "Sita",
+            "last_name": "Gurung",
+        },
+    ]
+
+    guides = []
+    for spec in guide_specs:
+        guide, created = User.objects.get_or_create(
+            username=spec["username"],
+            defaults={
+                "email": spec["email"],
+                "role": "guide",
+                "first_name": spec["first_name"],
+                "last_name": spec["last_name"],
+            },
+        )
+        changed = False
+        if guide.role != 'guide':
+            guide.role = 'guide'
+            changed = True
+        if spec["email"] and guide.email != spec["email"]:
+            guide.email = spec["email"]
+            changed = True
+        if spec["first_name"] and guide.first_name != spec["first_name"]:
+            guide.first_name = spec["first_name"]
+            changed = True
+        if spec["last_name"] and guide.last_name != spec["last_name"]:
+            guide.last_name = spec["last_name"]
+            changed = True
+        if created:
+            guide.set_password('password123')
+            changed = True
+        if changed:
+            guide.save()
+        guides.append(guide)
         
-    return provider
+    return provider, guides
 
 def create_destinations(provider):
     print("Creating destinations...")
@@ -220,10 +272,75 @@ def create_packages(provider):
         if created:
             print(f"Created package: {package.name}")
 
+def create_guide_profiles(guides, destinations):
+    print("Creating guide profiles...")
+
+    destination_map = {destination.name: destination for destination in destinations}
+    guide_profiles = [
+        {
+            "username": "regmibipul2015",
+            "headline": "Kathmandu heritage and cultural walking guide",
+            "bio": "Cultural guide focused on Kathmandu Valley heritage, temples, food streets, and day hikes around the valley.",
+            "languages": ["English", "Nepali", "Hindi"],
+            "years_experience": 4,
+            "daily_rate": 5500,
+            "certifications": "Licensed cultural guide. First-aid trained.",
+            "image": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=80",
+            "destinations": ["Kathmandu", "Pokhara", "Lumbini"],
+        },
+        {
+            "username": "pasang.guide",
+            "headline": "Everest and high-altitude trekking specialist",
+            "bio": "Mountain guide for Everest region treks, acclimatization routes, teahouse planning, and high-altitude safety.",
+            "languages": ["English", "Nepali", "Sherpa"],
+            "years_experience": 9,
+            "daily_rate": 9500,
+            "certifications": "NMA trekking guide. Wilderness first responder.",
+            "image": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=900&q=80",
+            "destinations": ["Everest Base Camp", "Manang", "Mustang"],
+        },
+        {
+            "username": "sita.guide",
+            "headline": "Wildlife, village stays, and family-friendly Nepal tours",
+            "bio": "Guides slow travel experiences including Chitwan safaris, Pokhara day tours, and village-based itineraries.",
+            "languages": ["English", "Nepali"],
+            "years_experience": 6,
+            "daily_rate": 6200,
+            "certifications": "Nature interpretation training. Community tourism facilitator.",
+            "image": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=80",
+            "destinations": ["Chitwan", "Pokhara", "Lumbini"],
+        },
+    ]
+
+    guide_map = {guide.username: guide for guide in guides}
+    for spec in guide_profiles:
+        user = guide_map.get(spec["username"])
+        if not user:
+            continue
+
+        profile, _ = TourGuideProfile.objects.update_or_create(
+            user=user,
+            defaults={
+                "headline": spec["headline"],
+                "bio": spec["bio"],
+                "languages": spec["languages"],
+                "years_experience": spec["years_experience"],
+                "daily_rate": spec["daily_rate"],
+                "certifications": spec["certifications"],
+                "image": spec["image"],
+                "is_active": True,
+            },
+        )
+        profile.destinations.set(
+            [destination_map[name] for name in spec["destinations"] if name in destination_map]
+        )
+        print(f"Upserted guide profile: {user.username}")
+
 if __name__ == '__main__':
-    provider = create_users()
+    provider, guides = create_users()
     destinations = create_destinations(provider)
     hotels = create_hotels(destinations, provider)
     create_rooms(hotels)
     create_packages(provider)
+    create_guide_profiles(guides, destinations)
     print("Seed data created successfully!")
