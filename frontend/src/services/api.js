@@ -61,6 +61,11 @@ export const authService = {
     googleLogin: (credential, role) => api.post('auth/google/', { credential, role }),
     getProfile: () => api.get('auth/profile/'),
     updateProfile: (data) => api.put('auth/profile/', data),
+    logout: () => Promise.resolve().then(() => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
+    }),
 };
 
 export const destinationService = {
