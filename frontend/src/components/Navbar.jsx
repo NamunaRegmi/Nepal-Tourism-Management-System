@@ -1,18 +1,33 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Mountain, Menu, X, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { APP_DATA_CHANGED } from '@/lib/dataSync';
 import { getNavLinksForRole, getStoredUser, getUserRole } from '@/lib/roleNavigation';
+import { authService } from '@/services/api';
 
 export default function Navbar({ currentPage, onNavigate }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const user = getStoredUser();
+  const [user, setUser] = useState(() => getStoredUser());
+
+  useEffect(() => {
+    const syncUser = () => {
+      setUser(getStoredUser());
+    };
+
+    window.addEventListener(APP_DATA_CHANGED, syncUser);
+    window.addEventListener('storage', syncUser);
+
+    return () => {
+      window.removeEventListener(APP_DATA_CHANGED, syncUser);
+      window.removeEventListener('storage', syncUser);
+    };
+  }, []);
+
   const role = getUserRole(user);
   const navLinks = getNavLinksForRole(role);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await authService.logout();
     onNavigate('home');
   };
 

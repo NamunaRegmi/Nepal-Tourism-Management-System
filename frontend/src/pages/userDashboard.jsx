@@ -22,6 +22,56 @@ function getBookingType(booking) {
   return 'Booking';
 }
 
+function getProfileDisplayName(user, profileForm = {}) {
+  const firstName = profileForm.first_name || user?.first_name || '';
+  const lastName = profileForm.last_name || user?.last_name || '';
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  return fullName || profileForm.username || user?.username || profileForm.email || user?.email || 'Traveler';
+}
+
+function getProfileInitials(user, profileForm = {}) {
+  const displayName = getProfileDisplayName(user, profileForm);
+  const parts = displayName.split(/\s+/).filter(Boolean);
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '').join('') || 'TR';
+}
+
+function getDefaultProfileImage(user, profileForm = {}) {
+  const seed = (profileForm.email || user?.email || profileForm.username || user?.username || 'traveler').toLowerCase();
+  const palettes = [
+    { start: '#0f766e', end: '#0ea5e9' },
+    { start: '#1d4ed8', end: '#0891b2' },
+    { start: '#7c3aed', end: '#2563eb' },
+    { start: '#c2410c', end: '#ea580c' },
+    { start: '#be123c', end: '#7c3aed' },
+  ];
+  const palette = palettes[seed.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) % palettes.length];
+  const initials = getProfileInitials(user, profileForm);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="${initials}">
+      <defs>
+        <linearGradient id="profileGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="${palette.start}" />
+          <stop offset="100%" stop-color="${palette.end}" />
+        </linearGradient>
+      </defs>
+      <rect width="160" height="160" rx="40" fill="url(#profileGradient)" />
+      <circle cx="80" cy="58" r="24" fill="rgba(255,255,255,0.16)" />
+      <path d="M32 136c10-26 28-38 48-38s38 12 48 38" fill="rgba(255,255,255,0.18)" />
+      <text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="Arial, sans-serif" font-size="42" font-weight="700" letter-spacing="1">
+        ${initials}
+      </text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) => {
   const [user, setUser] = useState(null);
   const [destinations, setDestinations] = useState([]);
@@ -276,9 +326,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
   useAppDataSync(fetchDashboardData);
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    authService.logout();
     onNavigate('home');
   };
 
@@ -336,6 +384,9 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
   };
 
   const goBack = () => setActiveView('dashboard');
+  const profileDisplayName = getProfileDisplayName(user, profileForm);
+  const profileInitials = getProfileInitials(user, profileForm);
+  const profileImageSrc = (profileForm.profile_picture || '').trim() || getDefaultProfileImage(user, profileForm);
 
   return (
     <div className="min-h-screen w-full bg-slate-50">
@@ -628,30 +679,27 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
             <div className="space-y-6">
               <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
                 <Card className="border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="bg-slate-50 px-6 py-7">
-                    <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="bg-slate-50 px-6 py-8 md:px-8">
+                    <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
                       <div className="flex items-start gap-5">
-                        <Avatar className="h-24 w-24 ring-2 ring-slate-200">
-                          {profileForm.profile_picture ? (
-                            <AvatarImage src={profileForm.profile_picture} alt="Profile" />
-                          ) : (
-                            <AvatarFallback>{(user?.first_name || user?.username || 'U').charAt(0).toUpperCase()}</AvatarFallback>
-                          )}
+                        <Avatar className="h-24 w-24 rounded-[2rem] ring-2 ring-slate-200 ring-offset-4 ring-offset-white">
+                          <AvatarImage src={profileImageSrc} alt={profileDisplayName} className="object-cover" />
+                          <AvatarFallback>{profileInitials}</AvatarFallback>
                         </Avatar>
-                        <div>
+                        <div className="space-y-3">
                           <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="text-3xl font-semibold text-slate-900">{user?.first_name ? `${user.first_name} ${user.last_name}` : user?.username}</h1>
+                            <h1 className="text-3xl font-semibold text-slate-900">{profileDisplayName}</h1>
                             <Badge variant="secondary" className="capitalize">Active</Badge>
                           </div>
-                          <p className="mt-2 text-sm text-slate-600">{user?.role === 'guide' ? 'Tour Guide' : user?.role === 'provider' ? 'Service Provider' : 'Traveler'}</p>
-                          <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
-                            <span>{user?.email}</span>
-                            <span>{user?.phone || 'No phone number yet'}</span>
+                          <p className="text-sm text-slate-600">{user?.role === 'guide' ? 'Tour Guide' : user?.role === 'provider' ? 'Service Provider' : 'Traveler'}</p>
+                          <div className="flex flex-wrap gap-3 text-sm text-slate-500">
+                            <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{user?.email || profileForm.email}</span>
+                            <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{user?.phone || profileForm.phone || 'No phone number yet'}</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:min-w-[26rem]">
                         {[{
                           label: 'Bookings',
                           value: bookings.length,
@@ -780,13 +828,43 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                   </CardContent>
                 </Card>
 
-                <Card className="border border-slate-200 shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Manage account</CardTitle>
-                    <CardDescription>Update profile details and preferences.</CardDescription>
+                <Card className="border border-slate-200 shadow-sm overflow-hidden">
+                  <CardHeader className="space-y-4 border-b border-slate-200 bg-white px-6 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200">
+                        <img
+                          src={profileImageSrc}
+                          alt={profileDisplayName}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <CardTitle>Manage account</CardTitle>
+                        <CardDescription>Update profile details, contact info, and your profile image.</CardDescription>
+                      </div>
+                    </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid gap-3">
+                  <CardContent className="space-y-6 px-6 py-6">
+                    <div className="rounded-3xl bg-slate-50 p-5">
+                      <div className="flex items-center gap-4">
+                        <div className="h-20 w-20 overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-200">
+                          <img
+                            src={profileImageSrc}
+                            alt={profileDisplayName}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-base font-semibold text-slate-900">{profileDisplayName}</p>
+                          <p className="text-sm text-slate-500">{profileForm.email || 'Add your email address'}</p>
+                          <p className="text-sm text-slate-500">
+                            {(profileForm.profile_picture || '').trim() ? 'Custom profile image active.' : 'Default profile image generated from your account details.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-5">
                       <div className="grid gap-2">
                         <Label htmlFor="username">Username</Label>
                         <Input
@@ -795,7 +873,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                           onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
                         />
                       </div>
-                      <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                           <Label htmlFor="first_name">First name</Label>
                           <Input
@@ -830,22 +908,17 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                           onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
                         />
                       </div>
+
                       <div className="grid gap-2">
                         <Label htmlFor="profile_photo">Profile photo</Label>
-                        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-4">
-                          <div className="grid gap-4 lg:grid-cols-[auto_1fr] lg:items-center">
-                            <div className="h-24 w-24 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
-                              {profileForm.profile_picture ? (
-                                <img
-                                  src={profileForm.profile_picture}
-                                  alt="Profile preview"
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-slate-400">
-                                  Preview
-                                </div>
-                              )}
+                        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5">
+                          <div className="grid gap-5 lg:grid-cols-[120px_1fr] lg:items-center">
+                            <div className="h-28 w-28 overflow-hidden rounded-[1.75rem] bg-white shadow-sm ring-1 ring-slate-200">
+                              <img
+                                src={profileImageSrc}
+                                alt="Profile preview"
+                                className="h-full w-full object-cover"
+                              />
                             </div>
 
                             <div className="grid gap-3">
@@ -865,7 +938,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                                 onChange={handleProfilePhotoUpload}
                                 className="sr-only"
                               />
-                              <p className="text-sm leading-6 text-slate-500">Upload a square photo or paste an image URL below to update your profile picture.</p>
+                              <p className="text-sm leading-6 text-slate-500">Upload a square photo or paste an image URL below. If you leave it empty, a default avatar will be shown automatically for email-login accounts.</p>
                               {!getCloudinaryUploadEnabled() && (
                                 <p className="text-sm leading-6 text-amber-600">Cloudinary env vars are missing, so file upload is disabled. Use the image URL field below.</p>
                               )}

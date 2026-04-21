@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { notifyAppDataChanged } from '@/lib/dataSync';
+import { getLandingPageForRole } from '@/lib/roleNavigation';
 
 const Auth = ({ onNavigate }) => {
   const [selectedRole, setSelectedRole] = useState(null);
@@ -30,10 +32,11 @@ const Auth = ({ onNavigate }) => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      notifyAppDataChanged();
       
       alert('Login successful!');
-      const userRole = selectedRole;
-      onNavigate(`${userRole}-dashboard`);
+      const authenticatedRole = response.data.user?.role || selectedRole;
+      onNavigate(getLandingPageForRole(authenticatedRole));
     } catch (error) {
       console.error('Login failed:', error);
       setError('Google login failed. Please try again.');
@@ -83,9 +86,10 @@ const Auth = ({ onNavigate }) => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      notifyAppDataChanged();
 
-      const userRole = selectedRole;
-      onNavigate(`${userRole}-dashboard`);
+      const authenticatedRole = response.data.user?.role || selectedRole;
+      onNavigate(getLandingPageForRole(authenticatedRole));
     } catch (error) {
       const errorMsg = error.response?.data?.error || 'Authentication failed';
       setError(errorMsg);

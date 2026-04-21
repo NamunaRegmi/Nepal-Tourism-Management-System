@@ -79,7 +79,7 @@ export default function PaymentPage({ onNavigate }) {
   const handleSkipPayment = () => {
     toast.success('Booking created. Payment is still pending.');
     if (onNavigate) {
-      onNavigate('user-dashboard');
+      onNavigate('user-bookings');
     } else {
       window.location.href = '/';
     }
@@ -103,8 +103,8 @@ export default function PaymentPage({ onNavigate }) {
           <CardContent className="pt-6">
             <div className="text-center">
               <p className="text-red-600 mb-4">{error}</p>
-              <Button onClick={() => onNavigate ? onNavigate('user-dashboard') : window.location.href = '/'}>
-                Go to Dashboard
+              <Button onClick={() => onNavigate ? onNavigate('home') : window.location.href = '/'}>
+                Go Home
               </Button>
             </div>
           </CardContent>
@@ -122,7 +122,7 @@ export default function PaymentPage({ onNavigate }) {
       <div className="max-w-2xl mx-auto">
         <Button
           variant="ghost"
-          onClick={() => onNavigate ? onNavigate('user-dashboard') : window.history.back()}
+          onClick={() => onNavigate ? onNavigate('home') : window.history.back()}
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
