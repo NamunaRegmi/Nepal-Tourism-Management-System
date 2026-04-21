@@ -3,16 +3,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 
 function UserDashboard({ onNavigate, onSelectDestination }) {
-  const [user, setUser] = useState(null);
+  const [user] = useState(() => {
+    const userData = localStorage.getItem('user');
+    if (!userData) return null;
+
+    try {
+      return JSON.parse(userData);
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (!userData) {
+    if (!user) {
       onNavigate('home');
-    } else {
-      setUser(JSON.parse(userData));
     }
-  }, [onNavigate]);
+  }, [onNavigate, user]);
 
   const handleLogout = () => {
     localStorage.clear();

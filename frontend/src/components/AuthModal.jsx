@@ -163,7 +163,7 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
                     alert('Password reset email sent! Check your inbox.');
                     setShowForgotPassword(false);
                     setError('');
-                  } catch (err) {
+                  } catch {
                     setError('Failed to send reset link');
                   }
                 }}

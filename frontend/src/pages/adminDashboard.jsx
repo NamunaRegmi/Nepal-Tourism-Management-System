@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { adminService } from '../services/api';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 
-const AdminDashboard = ({ onNavigate }) => {
+const AdminDashboard = () => {
   const [dashboardStats, setDashboardStats] = useState({
     total_users: 0,
     total_providers: 0,

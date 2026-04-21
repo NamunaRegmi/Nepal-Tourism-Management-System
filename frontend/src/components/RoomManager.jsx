@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash, Edit } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Trash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { roomService } from '@/services/api';
 import { notifyAppDataChanged } from '@/lib/dataSync';
@@ -15,18 +15,21 @@ const RoomManager = ({ hotel, onClose }) => {
         room_type: '', price: '', capacity: '', quantity: 1, amenities: '', is_available: true
     });
 
-    useEffect(() => {
-        if (hotel) fetchRooms();
-    }, [hotel]);
-
-    const fetchRooms = async () => {
+    const fetchRooms = useCallback(async () => {
+        if (!hotel) return;
         try {
             const response = await roomService.getByHotel(hotel.id);
             setRooms(response.data);
         } catch (err) {
             console.error("Failed to fetch rooms", err);
         }
-    };
+    }, [hotel]);
+
+    useEffect(() => {
+        // Initial room load is an external sync, so fetching here is intentional.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchRooms();
+    }, [fetchRooms]);
 
     const handleCreateRoom = async () => {
         if (!newRoom.room_type || !newRoom.price) {

@@ -5,9 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import esewaService from '../services/esewaService';
 
 export default function EsewaSuccess({ onNavigate }) {
-  // Get URL parameters
-  const urlParams = new URLSearchParams(window.location.search);
-  
   const [verifying, setVerifying] = useState(true);
   const [verificationResult, setVerificationResult] = useState(null);
   const [error, setError] = useState(null);
@@ -15,6 +12,8 @@ export default function EsewaSuccess({ onNavigate }) {
   useEffect(() => {
     const verifyPayment = async () => {
       try {
+        const urlParams = new URLSearchParams(window.location.search);
+
         // Log the full URL for debugging
         console.log('Full URL:', window.location.href);
         console.log('Search params:', window.location.search);

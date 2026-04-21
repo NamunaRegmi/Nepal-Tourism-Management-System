@@ -13,7 +13,6 @@ import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 import { toast } from 'react-hot-toast';
 
 const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) => {
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [user, setUser] = useState(null);
   const [destinations, setDestinations] = useState([]);
   const [bookings, setBookings] = useState([]);
