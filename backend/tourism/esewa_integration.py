@@ -19,11 +19,14 @@ class EsewaPaymentGateway:
         
         # eSewa Sandbox URLs
         self.payment_url = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form'
-        self.verify_url = 'https://uat.esewa.com.np/api/epay/transaction/status/'
+        self.verify_urls = [
+            'https://rc.esewa.com.np/api/epay/transaction/status/',
+            'https://uat.esewa.com.np/api/epay/transaction/status/',
+        ]
         
         # Return URLs
-        self.success_url = getattr(settings, 'ESEWA_SUCCESS_URL', 'http://localhost:3000/payment/esewa/success')
-        self.failure_url = getattr(settings, 'ESEWA_FAILURE_URL', 'http://localhost:3000/payment/esewa/failure')
+        self.success_url = getattr(settings, 'ESEWA_SUCCESS_URL', 'http://localhost:5173/payment/esewa/success')
+        self.failure_url = getattr(settings, 'ESEWA_FAILURE_URL', 'http://localhost:5173/payment/esewa/failure')
         
     def generate_signature(self, message):
         """
@@ -89,21 +92,29 @@ class EsewaPaymentGateway:
         try:
             if not product_code:
                 product_code = self.merchant_id
-            
-            # Prepare verification request
-            verify_url = f"{self.verify_url}?product_code={product_code}&total_amount={total_amount}&transaction_uuid={transaction_uuid}"
-            
-            print(f"eSewa Verification Request: {verify_url}")
-            
-            response = requests.get(verify_url, timeout=30)
-            
-            print(f"eSewa Verification Response Status: {response.status_code}")
-            print(f"eSewa Verification Response: {response.text}")
-            
-            if response.status_code == 200:
+
+            last_error = None
+
+            for base_url in self.verify_urls:
+                verify_url = f"{base_url}?product_code={product_code}&total_amount={total_amount}&transaction_uuid={transaction_uuid}"
+
+                print(f"eSewa Verification Request: {verify_url}")
+
+                response = requests.get(verify_url, timeout=30)
+
+                print(f"eSewa Verification Response Status: {response.status_code}")
+                print(f"eSewa Verification Response: {response.text}")
+
+                if response.status_code != 200:
+                    last_error = {
+                        'error': True,
+                        'message': f'Verification failed: {response.status_code} - {response.text}',
+                        'status_code': response.status_code,
+                    }
+                    continue
+
                 response_data = response.json()
-                
-                # Check if payment was successful
+
                 if response_data.get('status') == 'COMPLETE':
                     return {
                         'success': True,
@@ -113,17 +124,17 @@ class EsewaPaymentGateway:
                         'total_amount': response_data.get('total_amount'),
                         'transaction_code': response_data.get('transaction_code')
                     }
-                else:
-                    return {
-                        'error': True,
-                        'message': f'Payment not completed. Status: {response_data.get("status")}',
-                        'details': response_data
-                    }
-            else:
+
                 return {
                     'error': True,
-                    'message': f'Verification failed: {response.status_code} - {response.text}'
+                    'message': f'Payment not completed. Status: {response_data.get("status")}',
+                    'details': response_data
                 }
+
+            return last_error or {
+                'error': True,
+                'message': 'Verification failed: no usable response from eSewa status endpoints'
+            }
                 
         except requests.exceptions.RequestException as e:
             return {

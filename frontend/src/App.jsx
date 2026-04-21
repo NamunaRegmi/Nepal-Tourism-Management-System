@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Home from './pages/home';
@@ -33,13 +33,42 @@ function PageFallback() {
   );
 }
 
+function getBrowserLocation() {
+  return {
+    pathname: window.location.pathname,
+    search: window.location.search,
+  };
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState(() => getLandingPageForRole(getUserRole(getStoredUser())));
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [selectedGuideId, setSelectedGuideId] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [browserLocation, setBrowserLocation] = useState(() => getBrowserLocation());
+
+  useEffect(() => {
+    const syncBrowserLocation = () => {
+      setBrowserLocation(getBrowserLocation());
+    };
+
+    window.addEventListener('popstate', syncBrowserLocation);
+
+    return () => {
+      window.removeEventListener('popstate', syncBrowserLocation);
+    };
+  }, []);
+
+  const resetBrowserLocation = () => {
+    if (browserLocation.pathname !== '/' || browserLocation.search) {
+      window.history.pushState({}, '', '/');
+      setBrowserLocation(getBrowserLocation());
+    }
+  };
 
   const handleNavigate = (page) => {
+    resetBrowserLocation();
+
     if (page === 'auth') {
       setIsAuthModalOpen(true);
     } else {
@@ -71,27 +100,27 @@ export default function App() {
 
   const renderPage = () => {
     // Check if URL is a reset password link
-    if (window.location.pathname.startsWith('/reset-password')) {
-      return <ResetPassword onNavigate={setCurrentPage} />;
+    if (browserLocation.pathname.startsWith('/reset-password')) {
+      return <ResetPassword onNavigate={handleNavigate} />;
     }
 
     // Check if URL is a payment verification link
-    if (window.location.pathname.startsWith('/payment/verify')) {
+    if (browserLocation.pathname.startsWith('/payment/verify')) {
       return <PaymentVerify onNavigate={handleNavigate} />;
     }
 
     // Check if URL is a payment page
-    if (window.location.pathname.startsWith('/payment') && !window.location.pathname.includes('/esewa/')) {
+    if (browserLocation.pathname.startsWith('/payment') && !browserLocation.pathname.includes('/esewa/')) {
       return <PaymentPage onNavigate={handleNavigate} />;
     }
 
     // Check if URL is an eSewa success callback
-    if (window.location.pathname.startsWith('/payment/esewa/success')) {
+    if (browserLocation.pathname.startsWith('/payment/esewa/success')) {
       return <EsewaSuccess onNavigate={handleNavigate} />;
     }
 
     // Check if URL is an eSewa failure callback
-    if (window.location.pathname.startsWith('/payment/esewa/failure')) {
+    if (browserLocation.pathname.startsWith('/payment/esewa/failure')) {
       return <EsewaFailure onNavigate={handleNavigate} />;
     }
 

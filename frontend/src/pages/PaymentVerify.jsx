@@ -10,6 +10,20 @@ const PaymentVerify = ({ onNavigate }) => {
   const [bookingDetails, setBookingDetails] = useState(null);
 
   useEffect(() => {
+    if (status !== 'success') {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      onNavigate?.('user-bookings');
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [status, onNavigate]);
+
+  useEffect(() => {
     const verifyPayment = async () => {
       const searchParams = new URLSearchParams(window.location.search);
 
@@ -136,6 +150,7 @@ const PaymentVerify = ({ onNavigate }) => {
           <div className="text-center">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Payment Successful!</h3>
             <p className="text-sm text-gray-600 mb-4">{message}</p>
+            <p className="text-sm text-slate-500 mb-4">Redirecting to My Bookings...</p>
 
             {bookingDetails && (
               <div className="bg-gray-50 rounded-lg p-4 mb-4 text-left w-full">

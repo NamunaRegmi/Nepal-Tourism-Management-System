@@ -10,6 +10,20 @@ export default function EsewaSuccess({ onNavigate }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!verificationResult) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      onNavigate?.('user-bookings');
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [verificationResult, onNavigate]);
+
+  useEffect(() => {
     const verifyPayment = async () => {
       try {
         const urlParams = new URLSearchParams(window.location.search);
@@ -53,7 +67,13 @@ export default function EsewaSuccess({ onNavigate }) {
         }
       } catch (err) {
         console.error('Payment verification error:', err);
-        setError(err.message || 'Failed to verify payment');
+        const errorMessage =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          err?.response?.data?.details?.message ||
+          err?.message ||
+          'Failed to verify payment';
+        setError(errorMessage);
       } finally {
         setVerifying(false);
       }
@@ -116,6 +136,7 @@ export default function EsewaSuccess({ onNavigate }) {
           <CardDescription>
             Your payment has been verified and your booking is confirmed.
           </CardDescription>
+          <p className="text-sm text-slate-500">Redirecting to My Bookings...</p>
         </CardHeader>
         <CardContent className="space-y-4">
           {verificationResult && (
