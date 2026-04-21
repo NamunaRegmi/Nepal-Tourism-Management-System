@@ -155,6 +155,11 @@ class BookingSerializer(serializers.ModelSerializer):
         if request and request.method == 'POST' and request.user.role != 'user':
             raise serializers.ValidationError({'non_field_errors': ['Only traveler accounts can create bookings.']})
 
+        if request and request.method == 'POST':
+            attrs['status'] = 'pending'
+            attrs['payment_status'] = 'unpaid'
+            attrs['payment_method'] = 'none'
+
         return attrs
 
 

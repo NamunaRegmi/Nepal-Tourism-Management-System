@@ -2,7 +2,6 @@ import hashlib
 import hmac
 import base64
 import requests
-import json
 from django.conf import settings
 from .models import Booking
 
@@ -42,7 +41,7 @@ class EsewaPaymentGateway:
         """
         try:
             # Generate unique transaction UUID
-            transaction_uuid = f"BOOK-{booking.id}-{booking.created_at.timestamp()}"
+            transaction_uuid = f"BOOK-{booking.id}-{booking.created_at.strftime('%Y%m%d%H%M%S')}"
             
             # Amount in rupees (eSewa uses NPR)
             total_amount = str(float(booking.total_price))

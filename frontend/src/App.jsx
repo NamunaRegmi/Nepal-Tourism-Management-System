@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Home from './pages/home';
+import { getLandingPageForRole, getStoredUser, getUserRole, isDashboardPage } from './lib/roleNavigation';
 
 const About = lazy(() => import('./pages/About'));
 const UserDashboard = lazy(() => import('./pages/userDashboard'));
@@ -33,7 +34,7 @@ function PageFallback() {
 }
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState('home');
+  const [currentPage, setCurrentPage] = useState(() => getLandingPageForRole(getUserRole(getStoredUser())));
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [selectedGuideId, setSelectedGuideId] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -117,6 +118,12 @@ export default function App() {
           onNavigate={handleNavigate} 
           onSelectDestination={openDestination}
         />;
+      case 'user-bookings':
+        return <UserDashboard
+          view="bookings"
+          onNavigate={handleNavigate}
+          onSelectDestination={openDestination}
+        />;
       case 'destination-results':
         return <DestinationResults 
           onNavigate={handleNavigate} 
@@ -151,10 +158,12 @@ export default function App() {
     }
   };
 
+  const hideGlobalNavbar = isDashboardPage(currentPage);
+
   return (
     <div className="min-h-screen bg-slate-50">
-      <Navbar currentPage={currentPage} onNavigate={handleNavigate} />
-      <main className={currentPage === 'home' ? 'pt-0' : 'pt-16'}>
+      {!hideGlobalNavbar && <Navbar currentPage={currentPage} onNavigate={handleNavigate} />}
+      <main className={currentPage === 'home' || hideGlobalNavbar ? 'pt-0' : 'pt-16'}>
         <Suspense fallback={<PageFallback />}>
           {renderPage()}
         </Suspense>

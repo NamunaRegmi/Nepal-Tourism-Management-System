@@ -77,7 +77,7 @@ export default function PaymentPage({ onNavigate }) {
   };
 
   const handleSkipPayment = () => {
-    toast.success('Booking confirmed! You can pay later.');
+    toast.success('Booking created. Payment is still pending.');
     if (onNavigate) {
       onNavigate('user-dashboard');
     } else {

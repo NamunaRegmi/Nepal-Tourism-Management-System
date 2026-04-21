@@ -118,7 +118,7 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
             
             if (skipPayment) {
                 console.log('Skipping payment, going to CONFIRM step');
-                toast.success('Booking confirmed! Check your email for booking details.', {
+                toast.success('Booking created with pending payment. Complete payment later to confirm it.', {
                     duration: 4000,
                     icon: '🎉',
                 });
@@ -190,7 +190,7 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
 
     const handleDone = () => {
         notifyAppDataChanged();
-        toast.success('Booking confirmed! Check your email for booking details.', {
+        toast.success('Booking saved. Payment is still pending.', {
             duration: 4000,
             icon: '🎉',
         });
@@ -296,7 +296,7 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
                                     variant="outline"
                                     className="flex-1 sm:flex-none gap-2"
                                 >
-                                    {loading ? 'Processing...' : 'Book Now'}
+                                    {loading ? 'Processing...' : 'Reserve Without Payment'}
                                 </Button>
                                 <Button 
                                     onClick={() => handleConfirmBooking(false)} 
@@ -441,7 +441,7 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
                         </div>
                         <div className="text-green-600 font-bold text-sm uppercase tracking-widest mb-1">Success!</div>
                         <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                            {bookingId && bookingService.getPaymentStatus?.(bookingId) === 'paid' ? 'Booking Confirmed!' : 'Booking Received'}
+                            {bookingId && bookingService.getPaymentStatus?.(bookingId) === 'paid' ? 'Booking Confirmed!' : 'Booking Created'}
                         </h3>
                         <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 w-full text-left text-sm mb-5 space-y-1">
                             <div className="flex justify-between"><span className="text-gray-500">Hotel</span><span className="font-semibold">{hotel?.name}</span></div>
@@ -449,10 +449,10 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
                             <div className="flex justify-between"><span className="text-gray-500">Check-in</span><span>{startDate}</span></div>
                             <div className="flex justify-between"><span className="text-gray-500">Check-out</span><span>{endDate}</span></div>
                             <div className="flex justify-between border-t pt-2 mt-2"><span className="text-gray-700 font-semibold">Total Cost</span><span className="font-bold text-gray-900">{formatNPR(getTotalPrice())}</span></div>
-                            <div className="flex justify-between"><span className="text-gray-500">Booking Status</span><span className="font-semibold text-green-600">Confirmed</span></div>
+                            <div className="flex justify-between"><span className="text-gray-500">Booking Status</span><span className="font-semibold text-yellow-600">Pending</span></div>
                             <div className="flex justify-between"><span className="text-gray-500">Payment Status</span><span className="font-semibold text-yellow-600">Pending</span></div>
                         </div>
-                        <p className="text-xs text-gray-500 mb-6">Your booking has been confirmed. You can complete payment anytime before check-in. A confirmation email has been sent to your registered email address.</p>
+                        <p className="text-xs text-gray-500 mb-6">Your booking request has been created, but payment is still pending. Complete payment before check-in to confirm it.</p>
                         <Button onClick={handleDone} className="bg-blue-600 hover:bg-blue-700 px-10">Done</Button>
                     </div>
                 )}

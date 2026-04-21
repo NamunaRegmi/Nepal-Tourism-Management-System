@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { adminService } from '../services/api';
+import { adminService, bookingService } from '../services/api';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 
 const AdminDashboard = () => {
@@ -29,6 +29,9 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userDialogOpen, setUserDialogOpen] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
+  const [bookingActionLoading, setBookingActionLoading] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -178,6 +181,40 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error('User action failed:', error);
+    }
+  };
+
+  const handleBookingAction = async (action, booking) => {
+    const nextStatusMap = {
+      confirm: 'confirmed',
+      cancel: 'cancelled',
+      complete: 'completed',
+    };
+    const nextStatus = nextStatusMap[action];
+
+    if (!nextStatus) {
+      return;
+    }
+
+    try {
+      setBookingActionLoading(true);
+      await bookingService.update(booking.id, { status: nextStatus });
+
+      setBookings((currentBookings) =>
+        currentBookings.map((item) =>
+          item.id === booking.id ? { ...item, status: nextStatus } : item
+        )
+      );
+
+      setSelectedBooking((currentBooking) =>
+        currentBooking?.id === booking.id ? { ...currentBooking, status: nextStatus } : currentBooking
+      );
+      notifyAppDataChanged();
+    } catch (error) {
+      console.error('Booking action failed:', error);
+      window.alert(error.response?.data?.error || 'Could not update booking status.');
+    } finally {
+      setBookingActionLoading(false);
     }
   };
 
@@ -527,9 +564,31 @@ const AdminDashboard = () => {
                             </TableCell>
                             <TableCell>
                               <div className="flex space-x-2">
-                                <Button variant="ghost" size="sm">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedBooking(booking);
+                                    setBookingDialogOpen(true);
+                                  }}
+                                >
                                   <Eye className="h-4 w-4" />
                                 </Button>
+                                {booking.status === 'pending' && (
+                                  <>
+                                    <Button size="sm" onClick={() => handleBookingAction('confirm', booking)}>
+                                      Confirm
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={() => handleBookingAction('cancel', booking)}>
+                                      Cancel
+                                    </Button>
+                                  </>
+                                )}
+                                {booking.status === 'confirmed' && (
+                                  <Button size="sm" onClick={() => handleBookingAction('complete', booking)}>
+                                    Complete
+                                  </Button>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -614,6 +673,95 @@ const AdminDashboard = () => {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setUserDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bookingDialogOpen} onOpenChange={setBookingDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Booking Details</DialogTitle>
+          </DialogHeader>
+          {selectedBooking && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Booking ID</p>
+                  <p className="font-semibold">#{selectedBooking.id}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">User</p>
+                  <p className="font-semibold">{selectedBooking.user?.username || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Item</p>
+                  <p className="font-semibold">{selectedBooking.room_details?.room_type || selectedBooking.package_details?.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Amount</p>
+                  <p className="font-semibold">Rs. {selectedBooking.total_price}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Status</p>
+                  <Badge className={
+                    selectedBooking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                    selectedBooking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    selectedBooking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }>
+                    {selectedBooking.status}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Payment</p>
+                  <Badge className={
+                    selectedBooking.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
+                    selectedBooking.payment_status === 'failed' ? 'bg-red-100 text-red-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }>
+                    {selectedBooking.payment_status}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Start Date</p>
+                  <p className="font-semibold">{selectedBooking.start_date}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">End Date</p>
+                  <p className="font-semibold">{selectedBooking.end_date || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            {selectedBooking?.status === 'pending' && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => handleBookingAction('cancel', selectedBooking)}
+                  disabled={bookingActionLoading}
+                >
+                  Cancel Booking
+                </Button>
+                <Button
+                  onClick={() => handleBookingAction('confirm', selectedBooking)}
+                  disabled={bookingActionLoading}
+                >
+                  Confirm Booking
+                </Button>
+              </>
+            )}
+            {selectedBooking?.status === 'confirmed' && (
+              <Button
+                onClick={() => handleBookingAction('complete', selectedBooking)}
+                disabled={bookingActionLoading}
+              >
+                Mark Completed
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setBookingDialogOpen(false)}>
               Close
             </Button>
           </DialogFooter>

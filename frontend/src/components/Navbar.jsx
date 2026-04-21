@@ -1,46 +1,19 @@
 import { useState } from 'react';
 import { Mountain, Menu, X, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-const navLinks = [
-  { label: 'Home', key: 'home' },
-  { label: 'Destinations', key: 'destination-results' },
-  { label: 'Tours', key: 'tours' },
-  { label: 'Tour guides', key: 'guides' },
-  { label: 'About', key: 'about' },
-];
+import { getNavLinksForRole, getStoredUser, getUserRole } from '@/lib/roleNavigation';
 
 export default function Navbar({ currentPage, onNavigate }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const stored = localStorage.getItem('user');
-  let user = null;
-
-  if (stored) {
-    try {
-      user = JSON.parse(stored);
-    } catch {
-      user = null;
-    }
-  }
+  const user = getStoredUser();
+  const role = getUserRole(user);
+  const navLinks = getNavLinksForRole(role);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
     onNavigate('home');
-  };
-
-  const goToDashboard = () => {
-    if (!user) {
-      onNavigate('auth');
-      return;
-    }
-
-    const role = user?.role?.toLowerCase();
-    if (role === 'admin') onNavigate('admin-dashboard');
-    else if (role === 'provider') onNavigate('provider-dashboard');
-    else if (role === 'guide') onNavigate('guide-dashboard');
-    else onNavigate('user-dashboard');
   };
 
   const navButtonClass = (key) =>
@@ -74,12 +47,6 @@ export default function Navbar({ currentPage, onNavigate }) {
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <div className="flex items-center gap-4">
-                {(!user.role || user.role.toLowerCase() === 'user') && (
-                  <>
-                    <button onClick={() => onNavigate('user-wishlist')} className={navButtonClass('user-wishlist')}>Wishlist</button>
-                    <button onClick={() => onNavigate('user-profile')} className={navButtonClass('user-profile')}>Profile Settings</button>
-                  </>
-                )}
                 <span className="text-sm text-slate-700 hidden lg:inline border-l pl-4 border-slate-200">Hi, {user.first_name || user.username}</span>
                 <Button variant="outline" size="sm" className="gap-2" onClick={handleLogout}>
                   <LogOut className="h-4 w-4" />
@@ -124,24 +91,6 @@ export default function Navbar({ currentPage, onNavigate }) {
                 {link.label}
               </button>
             ))}
-              {(!user || (user.role && user.role.toLowerCase() !== 'user')) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    goToDashboard();
-                    setMobileOpen(false);
-                  }}
-                  className="block w-full text-left text-sm font-medium text-slate-700 hover:text-blue-600"
-                >
-                  Dashboard
-                </button>
-              )}
-              {user && (!user.role || user.role.toLowerCase() === 'user') && (
-                <>
-                  <button onClick={() => { onNavigate('user-wishlist'); setMobileOpen(false); }} className="block w-full text-left text-sm font-medium text-slate-700 hover:text-blue-600">Wishlist</button>
-                  <button onClick={() => { onNavigate('user-profile'); setMobileOpen(false); }} className="block w-full text-left text-sm font-medium text-slate-700 hover:text-blue-600">Profile Settings</button>
-                </>
-              )}
             {user ? (
               <button
                 type="button"
