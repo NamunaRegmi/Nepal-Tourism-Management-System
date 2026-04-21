@@ -28,6 +28,12 @@ function formatRs(amount) {
   return Math.round(n).toLocaleString('en-IN');
 }
 
+function getDisplayName(user) {
+  if (!user) return 'Provider';
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+  return fullName || user.username || 'Provider';
+}
+
 const ProviderDashboard = ({ onNavigate }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -64,6 +70,16 @@ const ProviderDashboard = ({ onNavigate }) => {
   const [hotelImagePreview, setHotelImagePreview] = useState('');
   const [savingHotel, setSavingHotel] = useState(false);
   const [hotelDialogOpen, setHotelDialogOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    username: '',
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    profile_picture: '',
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Stats data
   const [stats, setStats] = useState({
@@ -78,23 +94,31 @@ const ProviderDashboard = ({ onNavigate }) => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [hotelsRes, bookingsRes, destRes] = await Promise.all([
+      const [profileRes, hotelsRes, bookingsRes, destRes] = await Promise.all([
+        authService.getProfile(),
         hotelService.getMyHotels(),
         bookingService.getMyBookings(),
         destinationService.getAll()
       ]);
+
+      const profileData = profileRes.data || null;
+      if (profileData) {
+        setUser(profileData);
+        setProfileForm({
+          username: profileData.username || '',
+          first_name: profileData.first_name || '',
+          last_name: profileData.last_name || '',
+          email: profileData.email || '',
+          phone: profileData.phone || '',
+          profile_picture: profileData.profile_picture || '',
+        });
+        localStorage.setItem('user', JSON.stringify(profileData));
+      }
       
       const allHotels = hotelsRes.data || [];
       setHotels(allHotels);
       setBookings(bookingsRes.data || []);
       setDestinations(destRes.data || []);
-
-      const meRaw = localStorage.getItem('user');
-      const me = meRaw ? JSON.parse(meRaw) : null;
-      const myHotelCount =
-        me?.id != null
-          ? allHotels.filter((h) => Number(h.provider) === Number(me.id)).length
-          : 0;
 
       const bookingsData = bookingsRes.data || [];
       const totalRevenue = bookingsData.reduce(
@@ -104,7 +128,7 @@ const ProviderDashboard = ({ onNavigate }) => {
       setStats({
         totalBookings: bookingsData.length,
         totalRevenue,
-        activeProperties: myHotelCount,
+        activeProperties: allHotels.length,
         averageRating: 4.5,
         monthlyGrowth: 15.3,
         pendingBookings: bookingsData.filter(b => b.status === 'pending').length
@@ -130,10 +154,35 @@ const ProviderDashboard = ({ onNavigate }) => {
   const handleLogout = async () => {
     try {
       await authService.logout();
-      localStorage.removeItem('user');
       onNavigate('home');
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setSavingProfile(true);
+      const response = await authService.updateProfile(profileForm);
+      const updatedProfile = response.data;
+      setUser(updatedProfile);
+      setProfileForm({
+        username: updatedProfile.username || '',
+        first_name: updatedProfile.first_name || '',
+        last_name: updatedProfile.last_name || '',
+        email: updatedProfile.email || '',
+        phone: updatedProfile.phone || '',
+        profile_picture: updatedProfile.profile_picture || '',
+      });
+      localStorage.setItem('user', JSON.stringify(updatedProfile));
+      setProfileDialogOpen(false);
+      setShowProfileDropdown(false);
+      notifyAppDataChanged();
+    } catch (error) {
+      console.error('Provider profile update failed:', error);
+      window.alert(error.response?.data ? JSON.stringify(error.response.data) : 'Could not update profile.');
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -306,7 +355,7 @@ const ProviderDashboard = ({ onNavigate }) => {
     const name = (hotel.name || '').toLowerCase();
     const addr = (hotel.address || '').toLowerCase();
     const destId = hotel.destination_id ?? hotel.destination;
-    const dest = destinations.find((d) => d.id === destId);
+    const dest = destinations.find((d) => Number(d.id) === Number(destId));
     const destName = (dest?.name || '').toLowerCase();
     return name.includes(q) || addr.includes(q) || destName.includes(q);
   });
@@ -357,12 +406,23 @@ const ProviderDashboard = ({ onNavigate }) => {
             <div className="relative">
               <Avatar className="h-8 w-8 cursor-pointer" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
                 <AvatarFallback className="bg-gradient-to-r from-green-600 to-blue-600 text-white">
-                  {user?.name?.[0] || 'P'}
+                  {getDisplayName(user).charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               {showProfileDropdown && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
-                  <Button variant="ghost" className="w-full justify-start">
+                  <div className="px-3 py-2 border-b border-gray-100">
+                    <p className="text-sm font-semibold text-gray-900">{getDisplayName(user)}</p>
+                    <p className="text-xs text-gray-500">{user?.email || 'provider@example.com'}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      setProfileDialogOpen(true);
+                      setShowProfileDropdown(false);
+                    }}
+                  >
                     <Settings className="h-4 w-4 mr-2" />
                     Settings
                   </Button>
@@ -429,7 +489,7 @@ const ProviderDashboard = ({ onNavigate }) => {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Welcome back, {user?.name || 'Provider'}!</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">Welcome back, {getDisplayName(user)}!</h2>
                     <p className="text-gray-500">Here's an overview of your tourism business performance.</p>
                   </div>
                   <Button className="bg-gradient-to-r from-green-600 to-blue-600 pointer-events-auto cursor-pointer" onClick={handleAddHotel}>
@@ -822,6 +882,75 @@ const ProviderDashboard = ({ onNavigate }) => {
             <Button onClick={handleSaveHotel} disabled={!hotelForm.name || !hotelForm.destination_id || savingHotel || (hotelImageFile && !getCloudinaryUploadEnabled())}>
               <Save className="h-4 w-4 mr-2" />
               {savingHotel ? 'Saving…' : isAddingHotel ? 'Add Property' : 'Update Property'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Provider Profile</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="provider-username">Username</Label>
+              <Input
+                id="provider-username"
+                value={profileForm.username}
+                onChange={(event) => setProfileForm((current) => ({ ...current, username: event.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="provider-first-name">First Name</Label>
+                <Input
+                  id="provider-first-name"
+                  value={profileForm.first_name}
+                  onChange={(event) => setProfileForm((current) => ({ ...current, first_name: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="provider-last-name">Last Name</Label>
+                <Input
+                  id="provider-last-name"
+                  value={profileForm.last_name}
+                  onChange={(event) => setProfileForm((current) => ({ ...current, last_name: event.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="provider-email">Email</Label>
+              <Input
+                id="provider-email"
+                type="email"
+                value={profileForm.email}
+                onChange={(event) => setProfileForm((current) => ({ ...current, email: event.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="provider-phone">Phone</Label>
+              <Input
+                id="provider-phone"
+                value={profileForm.phone}
+                onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="provider-picture">Profile Picture URL</Label>
+              <Input
+                id="provider-picture"
+                value={profileForm.profile_picture}
+                onChange={(event) => setProfileForm((current) => ({ ...current, profile_picture: event.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveProfile} disabled={savingProfile}>
+              {savingProfile ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
