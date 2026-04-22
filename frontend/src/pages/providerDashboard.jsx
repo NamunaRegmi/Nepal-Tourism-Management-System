@@ -14,6 +14,7 @@ import { createObjectPreview, getCloudinaryUploadEnabled, uploadImageToCloudinar
 import { cn } from '@/lib/utils';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 import RoomManager from '@/components/RoomManager';
+import PackageManager from '@/components/PackageManager';
 
 const DEFAULT_HOTEL_IMAGE = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800';
 
@@ -432,6 +433,14 @@ const ProviderDashboard = ({ onNavigate }) => {
             </Button>
             <Button 
               variant="ghost" 
+              className={`w-full justify-start ${activeTab === 'packages' ? 'text-green-600 bg-green-50' : ''}`}
+              onClick={() => setActiveTab('packages')}
+            >
+              <Package className="h-4 w-4 mr-3" />
+              Tour Packages
+            </Button>
+            <Button 
+              variant="ghost" 
               className={`w-full justify-start ${activeTab === 'bookings' ? 'text-green-600 bg-green-50' : ''}`}
               onClick={() => setActiveTab('bookings')}
             >
@@ -635,6 +644,10 @@ const ProviderDashboard = ({ onNavigate }) => {
                   )}
                 </CardContent>
               </Card>
+            )}
+
+            {activeTab === 'packages' && (
+              <PackageManager />
             )}
 
             {activeTab === 'bookings' && (

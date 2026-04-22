@@ -8,7 +8,7 @@ const About = lazy(() => import('./pages/About'));
 const UserDashboard = lazy(() => import('./pages/userDashboard'));
 const AdminDashboard = lazy(() => import('./pages/adminDashboard'));
 const ProviderDashboard = lazy(() => import('./pages/providerDashboard'));
-const Tours = lazy(() => import('./pages/Tours'));
+const Tours = lazy(() => import('./pages/ToursNew'));
 const Guides = lazy(() => import('./pages/Guides'));
 const GuideDetail = lazy(() => import('./pages/GuideDetail'));
 const GuideDashboard = lazy(() => import('./pages/GuideDashboard'));

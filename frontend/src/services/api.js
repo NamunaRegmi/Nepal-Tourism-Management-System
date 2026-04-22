@@ -97,8 +97,9 @@ export const roomService = {
 
 export const packageService = {
     getAll: () => api.get('packages/'),
+    getMyPackages: () => api.get('provider/packages/'),
     getById: (id) => api.get(`packages/${id}/`),
-    create: (data) => api.post('packages/', data),
+    create: (data) => api.post('provider/packages/', data),
     update: (id, data) => api.put(`packages/${id}/`, data),
     delete: (id) => api.delete(`packages/${id}/`),
 };

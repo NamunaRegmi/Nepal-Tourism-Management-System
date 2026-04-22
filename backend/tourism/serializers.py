@@ -99,7 +99,7 @@ class PackageSerializer(serializers.ModelSerializer):
     provider_name = serializers.CharField(source='provider.username', read_only=True)
     destinations = DestinationSerializer(many=True, read_only=True)
     destination_ids = serializers.PrimaryKeyRelatedField(
-        queryset=Destination.objects.all(), write_only=True, many=True, source='destinations'
+        queryset=Destination.objects.all(), write_only=True, many=True, source='destinations', required=False
     )
     image_url = serializers.SerializerMethodField()
     image_file = serializers.ImageField(required=False, allow_null=True, write_only=True)
@@ -108,10 +108,11 @@ class PackageSerializer(serializers.ModelSerializer):
         model = Package
         fields = [
             'id', 'provider', 'provider_name', 'name', 'description', 'price',
-            'duration_days', 'destinations', 'destination_ids', 'image', 'image_file', 'image_url',
-            'is_active', 'created_at'
+            'duration_days', 'max_people', 'destination', 'itinerary', 'included_services',
+            'destinations', 'destination_ids', 'image', 'image_file', 'image_url',
+            'is_active', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'provider']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'provider']
 
     def get_image_url(self, obj):
         request = self.context.get('request')
