@@ -76,7 +76,7 @@ class Destination(models.Model):
 
 class Hotel(models.Model):
     """Model for hotels/resorts at destinations"""
-    provider = models.ForeignKey(User, on_delete=models.CASCADE, related_name='hotels', null=True)  # Allow null for existing rows
+    provider = models.ForeignKey(User, on_delete=models.CASCADE, related_name='hotels', limit_choices_to={'role': 'provider'})
     destination = models.ForeignKey(Destination, on_delete=models.CASCADE, related_name='hotels')
     name = models.CharField(max_length=200)
     description = models.TextField()
@@ -135,17 +135,25 @@ class Package(models.Model):
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
     duration_days = models.IntegerField()
-    destinations = models.ManyToManyField(Destination, related_name='packages')
+    max_people = models.IntegerField(default=10, help_text="Maximum number of people allowed")
+    destination = models.CharField(max_length=200, blank=True, help_text="Primary destination name")
+    itinerary = models.TextField(blank=True, help_text="Day-by-day itinerary")
+    included_services = models.TextField(blank=True, help_text="Services included in the package")
+    destinations = models.ManyToManyField(Destination, related_name='packages', blank=True)
     image = models.URLField(blank=True, null=True)
     image_file = models.ImageField(upload_to='packages/', blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     @property
     def image_url(self):
         if self.image_file:
             return self.image_file.url
         return self.image or ''
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.name

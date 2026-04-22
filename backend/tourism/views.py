@@ -478,9 +478,10 @@ class ProviderHotelListView(APIView):
 
         # Only return properties belonging to the authenticated provider
         hotels = (
-            Hotel.objects.filter(provider=request.user, is_active=True)
+            Hotel.objects.filter(provider=request.user)
             .select_related('destination', 'provider')
-            .order_by('destination__name', 'name')
+            .prefetch_related('rooms')
+            .order_by('-created_at')
         )
         serializer = HotelSerializer(hotels, many=True, context={'request': request})
         return Response(serializer.data)
@@ -694,9 +695,42 @@ class PackageListView(APIView):
     permission_classes = [AllowAny]
     
     def get(self, request):
-        packages = Package.objects.filter(is_active=True)
+        packages = Package.objects.filter(is_active=True).select_related('provider').prefetch_related('destinations')
         serializer = PackageSerializer(packages, many=True, context={'request': request})
         return Response(serializer.data)
+
+
+class ProviderPackageListView(APIView):
+    """List or create packages owned by the authenticated provider."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != 'provider':
+            return Response(
+                {'error': 'Only service providers can access this endpoint'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        packages = (
+            Package.objects.filter(provider=request.user)
+            .prefetch_related('destinations')
+            .order_by('-created_at')
+        )
+        serializer = PackageSerializer(packages, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        if request.user.role != 'provider':
+            return Response(
+                {'error': 'Only service providers can create packages'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = PackageSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(provider=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
         if not request.user.is_authenticated or request.user.role not in ['provider', 'admin']:
@@ -729,7 +763,10 @@ class PackageDetailView(APIView):
         except Package.DoesNotExist:
             return Response({'error': 'Package not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        if request.user != package.provider and request.user.role != 'admin':
+        # Check permissions
+        if request.user.role == 'provider' and package.provider_id != request.user.id:
+            return Response({'error': 'You can only update your own packages'}, status=status.HTTP_403_FORBIDDEN)
+        elif request.user.role not in ['provider', 'admin']:
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = PackageSerializer(package, data=request.data, partial=True, context={'request': request})
@@ -747,8 +784,13 @@ class PackageDetailView(APIView):
         except Package.DoesNotExist:
             return Response({'error': 'Package not found'}, status=status.HTTP_404_NOT_FOUND)
             
-        if request.user != package.provider and request.user.role != 'admin':
-            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        # Check permissions
+        if request.user.role == 'admin':
+            pass
+        elif request.user.role == 'provider' and package.provider_id == request.user.id:
+            pass
+        else:
+            return Response({'error': 'Only admins or the owning provider can delete this package'}, status=status.HTTP_403_FORBIDDEN)
             
         package.is_active = False
         package.save()
@@ -891,6 +933,25 @@ class AdminProviderListView(APIView):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         providers = User.objects.filter(role='provider').order_by('-date_joined')
         return Response(UserSerializer(providers, many=True).data)
+
+
+class AdminHotelListView(APIView):
+    """Admin view to list and manage all hotels from all providers"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Admin can see all hotels regardless of provider
+        hotels = (
+            Hotel.objects.all()
+            .select_related('destination', 'provider')
+            .prefetch_related('rooms')
+            .order_by('-created_at')
+        )
+        serializer = HotelSerializer(hotels, many=True, context={'request': request})
+        return Response(serializer.data)
 
 
 class TourGuideListView(APIView):

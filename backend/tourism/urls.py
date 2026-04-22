@@ -14,6 +14,7 @@ from .views import (
     RoomListView,
     RoomDetailView,
     PackageListView,
+    ProviderPackageListView,
     PackageDetailView,
     BookingListView,
     BookingDetailView,
@@ -29,6 +30,7 @@ from .views import (
     AdminUserListView,
     AdminUserDetailView,
     AdminProviderListView,
+    AdminHotelListView,
     TourGuideListView,
     TourGuideDetailView,
     TourGuideMeProfileView,
@@ -60,6 +62,7 @@ urlpatterns = [
     
     # Package URLs
     path('packages/', PackageListView.as_view(), name='package-list'),
+    path('provider/packages/', ProviderPackageListView.as_view(), name='provider-package-list'),
     path('packages/<int:pk>/', PackageDetailView.as_view(), name='package-detail'),
     
     # Tour guides
@@ -91,4 +94,5 @@ urlpatterns = [
     path('admin/users/', AdminUserListView.as_view(), name='admin-users'),
     path('admin/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
     path('admin/providers/', AdminProviderListView.as_view(), name='admin-providers'),
+    path('admin/hotels/', AdminHotelListView.as_view(), name='admin-hotels'),
 ]

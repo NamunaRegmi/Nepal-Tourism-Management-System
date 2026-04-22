@@ -122,14 +122,28 @@ const Home = ({ onNavigate, onSelectDestination }) => {
   return (
     <div className="flex flex-col w-full bg-slate-50">
       <main className="relative">
-        <div className="h-[70vh] relative">
-          {/* Nepal-themed background with overlay */}
+        <div className="h-[70vh] relative overflow-hidden">
+          {/* Nepal-themed background with overlay and Ken Burns animation */}
           <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat animate-ken-burns"
             style={{
-              backgroundImage: `linear-gradient(rgba(0, 30, 60, 0.7), rgba(0, 30, 60, 0.8)), url('https://images.unsplash.com/photo-1544735716-392fe2489ffa?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D&auto=format&fit=crop&w=2070&q=80')`
+              backgroundImage: `linear-gradient(rgba(0, 30, 60, 0.7), rgba(0, 30, 60, 0.8)), url('https://images.unsplash.com/photo-1544735716-392fe2489ffa?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D&auto=format&fit=crop&w=2070&q=80')`,
+              willChange: 'transform'
             }}
           />
+          
+          {/* Animated Particles/Stars */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-20 left-10 w-3 h-3 bg-white/60 rounded-full animate-float shadow-lg shadow-white/50"></div>
+            <div className="absolute top-40 right-20 w-4 h-4 bg-white/50 rounded-full animate-float animation-delay-1000 shadow-lg shadow-white/40"></div>
+            <div className="absolute bottom-32 left-1/4 w-3 h-3 bg-white/55 rounded-full animate-float animation-delay-2000 shadow-lg shadow-white/45"></div>
+            <div className="absolute top-1/2 right-1/3 w-3 h-3 bg-white/60 rounded-full animate-float animation-delay-3000 shadow-lg shadow-white/50"></div>
+            <div className="absolute bottom-20 right-10 w-4 h-4 bg-white/50 rounded-full animate-float animation-delay-1500 shadow-lg shadow-white/40"></div>
+            <div className="absolute top-1/3 left-1/3 w-3 h-3 bg-white/55 rounded-full animate-float animation-delay-2500 shadow-lg shadow-white/45"></div>
+          </div>
+          
+          {/* Animated Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-purple-600/20 animate-pulse-slow"></div>
           
           {/* Decorative mountain silhouettes */}
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-900/50 to-transparent" />
