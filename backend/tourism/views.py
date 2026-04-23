@@ -712,25 +712,12 @@ class ProviderPackageListView(APIView):
             )
 
         packages = (
-            Package.objects.filter(provider=request.user)
+            Package.objects.filter(provider=request.user, is_active=True)
             .prefetch_related('destinations')
             .order_by('-created_at')
         )
         serializer = PackageSerializer(packages, many=True, context={'request': request})
         return Response(serializer.data)
-
-    def post(self, request):
-        if request.user.role != 'provider':
-            return Response(
-                {'error': 'Only service providers can create packages'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        serializer = PackageSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            serializer.save(provider=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
         if not request.user.is_authenticated or request.user.role not in ['provider', 'admin']:
@@ -794,7 +781,7 @@ class PackageDetailView(APIView):
             
         package.is_active = False
         package.save()
-        return Response({'message': 'Package deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        return Response({'message': 'Package deleted successfully', 'success': True}, status=status.HTTP_200_OK)
 
 
 # Booking Views
@@ -882,6 +869,8 @@ class AdminDashboardStatsView(APIView):
         total_guides = User.objects.filter(role='guide').count()
         total_bookings = Booking.objects.count()
         total_guide_bookings = GuideBooking.objects.count()
+        total_packages = Package.objects.filter(is_active=True).count()
+        total_hotels = Hotel.objects.filter(is_active=True).count()
 
         revenue = Booking.objects.filter(status='confirmed').aggregate(total=models.Sum('total_price'))['total'] or 0
         guide_revenue = GuideBooking.objects.filter(status='confirmed').aggregate(
@@ -894,6 +883,8 @@ class AdminDashboardStatsView(APIView):
             'total_guides': total_guides,
             'total_bookings': total_bookings,
             'total_guide_bookings': total_guide_bookings,
+            'total_packages': total_packages,
+            'total_hotels': total_hotels,
             'revenue': revenue,
             'guide_revenue': guide_revenue,
         })
@@ -912,17 +903,39 @@ class AdminUserListView(APIView):
 class AdminUserDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, pk):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            user = User.objects.get(pk=pk)
+            return Response(UserSerializer(user).data)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request, pk):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            user = User.objects.get(pk=pk)
+            serializer = UserSerializer(user, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
     def delete(self, request, pk):
         if request.user.role != 'admin':
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         if pk == request.user.id:
             return Response({'error': 'Cannot delete your own account this way'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            target = User.objects.get(pk=pk, role='user')
+            target = User.objects.get(pk=pk)
+            target.delete()
+            return Response({'message': 'User deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        target.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AdminProviderListView(APIView):
@@ -933,6 +946,44 @@ class AdminProviderListView(APIView):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         providers = User.objects.filter(role='provider').order_by('-date_joined')
         return Response(UserSerializer(providers, many=True).data)
+
+
+class AdminProviderDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            provider = User.objects.get(pk=pk, role='provider')
+            return Response(UserSerializer(provider).data)
+        except User.DoesNotExist:
+            return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request, pk):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            provider = User.objects.get(pk=pk, role='provider')
+            serializer = UserSerializer(provider, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pk):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        if pk == request.user.id:
+            return Response({'error': 'Cannot delete your own account'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            provider = User.objects.get(pk=pk, role='provider')
+            provider.delete()
+            return Response({'message': 'Provider deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        except User.DoesNotExist:
+            return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class AdminHotelListView(APIView):
@@ -951,6 +1002,25 @@ class AdminHotelListView(APIView):
             .order_by('-created_at')
         )
         serializer = HotelSerializer(hotels, many=True, context={'request': request})
+        return Response(serializer.data)
+
+
+class AdminPackageListView(APIView):
+    """Admin view to list all packages from all providers"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Admin can see all packages regardless of provider
+        packages = (
+            Package.objects.all()
+            .select_related('provider')
+            .prefetch_related('destinations')
+            .order_by('-created_at')
+        )
+        serializer = PackageSerializer(packages, many=True, context={'request': request})
         return Response(serializer.data)
 
 

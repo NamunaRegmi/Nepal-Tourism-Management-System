@@ -30,7 +30,9 @@ from .views import (
     AdminUserListView,
     AdminUserDetailView,
     AdminProviderListView,
+    AdminProviderDetailView,
     AdminHotelListView,
+    AdminPackageListView,
     TourGuideListView,
     TourGuideDetailView,
     TourGuideMeProfileView,
@@ -94,5 +96,7 @@ urlpatterns = [
     path('admin/users/', AdminUserListView.as_view(), name='admin-users'),
     path('admin/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
     path('admin/providers/', AdminProviderListView.as_view(), name='admin-providers'),
+    path('admin/providers/<int:pk>/', AdminProviderDetailView.as_view(), name='admin-provider-detail'),
     path('admin/hotels/', AdminHotelListView.as_view(), name='admin-hotels'),
+    path('admin/packages/', AdminPackageListView.as_view(), name='admin-packages'),
 ]

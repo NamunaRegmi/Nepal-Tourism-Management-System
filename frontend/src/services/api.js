@@ -130,8 +130,14 @@ export const guideBookingService = {
 export const adminService = {
     getStats: () => api.get('admin/stats/'),
     getAllUsers: () => api.get('admin/users/'),
+    getUser: (id) => api.get(`admin/users/${id}/`),
+    updateUser: (id, data) => api.put(`admin/users/${id}/`, data),
     deleteUser: (id) => api.delete(`admin/users/${id}/`),
     getAllProviders: () => api.get('admin/providers/'),
+    getProvider: (id) => api.get(`admin/providers/${id}/`),
+    updateProvider: (id, data) => api.put(`admin/providers/${id}/`, data),
+    deleteProvider: (id) => api.delete(`admin/providers/${id}/`),
+    getAllPackages: () => api.get('admin/packages/'),
     // Same data as BookingListView for admin role (backend returns all bookings)
     getAllBookings: () => api.get('bookings/'),
 };
