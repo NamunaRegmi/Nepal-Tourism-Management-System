@@ -26,6 +26,96 @@ function getRoomBookingImage(booking) {
   return booking.room_details?.image_url || booking.room_details?.image || '';
 }
 
+const CANCELLATION_CUTOFF_HOURS = 18;
+const BOOKING_TIME_ZONE_OFFSET = '+05:45';
+
+function getBookingStartAt(booking) {
+  if (!booking?.start_date) {
+    return null;
+  }
+
+  return new Date(`${booking.start_date}T00:00:00${BOOKING_TIME_ZONE_OFFSET}`);
+}
+
+function getBookingEndAt(booking) {
+  const endDate = booking?.end_date || booking?.start_date;
+  if (!endDate) {
+    return null;
+  }
+
+  const endAt = new Date(`${endDate}T00:00:00${BOOKING_TIME_ZONE_OFFSET}`);
+  if (Number.isNaN(endAt.getTime())) {
+    return null;
+  }
+
+  endAt.setDate(endAt.getDate() + 1);
+  return endAt;
+}
+
+function getCancellationInfo(booking) {
+  if (['cancelled', 'completed'].includes(booking?.status)) {
+    return { canCancel: false, message: '' };
+  }
+
+  const startAt = getBookingStartAt(booking);
+  if (!startAt || Number.isNaN(startAt.getTime())) {
+    return { canCancel: true, message: '' };
+  }
+
+  const now = new Date();
+  const msUntilStart = startAt.getTime() - now.getTime();
+  const cutoffMs = CANCELLATION_CUTOFF_HOURS * 60 * 60 * 1000;
+
+  if (msUntilStart <= 0) {
+    const endAt = getBookingEndAt(booking);
+    const hasEnded = endAt && now >= endAt;
+
+    return {
+      canCancel: false,
+      message: hasEnded
+        ? 'Already gone. This booking date has passed.'
+        : 'Already started. This booking can no longer be cancelled.',
+      displayStatus: hasEnded ? 'Already gone' : 'Already started',
+    };
+  }
+
+  if (msUntilStart <= cutoffMs) {
+    return {
+      canCancel: false,
+      message: `Cancellation locked. You can cancel only more than ${CANCELLATION_CUTOFF_HOURS} hours before the start date.`,
+    };
+  }
+
+  return { canCancel: true, message: '' };
+}
+
+function getBookingDisplayStatus(booking) {
+  const cancellationInfo = getCancellationInfo(booking);
+  return cancellationInfo.displayStatus || booking?.status || 'pending';
+}
+
+function getBookingBadgeClass(booking) {
+  const displayStatus = getBookingDisplayStatus(booking);
+
+  if (['Already gone', 'Already started'].includes(displayStatus) || booking?.status === 'completed') {
+    return 'bg-slate-100 text-slate-700';
+  }
+
+  if (booking?.status === 'confirmed') {
+    return 'bg-green-100 text-green-800';
+  }
+
+  if (booking?.status === 'pending') {
+    return 'bg-yellow-100 text-yellow-800';
+  }
+
+  if (booking?.status === 'cancelled') {
+    return 'bg-red-100 text-red-800';
+  }
+
+  return 'bg-slate-100 text-slate-700';
+}
+
 function getProfileDisplayName(user, profileForm = {}) {
   const firstName = profileForm.first_name || user?.first_name || '';
   const lastName = profileForm.last_name || user?.last_name || '';
@@ -359,6 +449,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
       notifyAppDataChanged();
     } catch (err) {
       console.error('Failed to cancel booking', err);
+      toast.error(err.response?.data?.error || err.message || 'Unable to cancel this booking.');
     }
   };
 
@@ -369,6 +460,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
       notifyAppDataChanged();
     } catch (err) {
       console.error('Failed to cancel guide booking', err);
+      toast.error(err.response?.data?.error || err.message || 'Unable to cancel this guide request.');
     }
   };
 
@@ -640,56 +732,65 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                               <div className="rounded-3xl bg-slate-50 p-6 text-slate-600">You have no hotel or package bookings yet.</div>
                             ) : (
                               <div className="grid gap-4">
-                                {bookings.map((booking) => (
-                                  <div key={booking.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                                    {getRoomBookingImage(booking) && (
-                                      <div className="mb-4 overflow-hidden rounded-2xl">
-                                        <img
-                                          src={getRoomBookingImage(booking)}
-                                          alt={getBookingTitle(booking)}
-                                          className="h-44 w-full object-cover"
-                                        />
+                                {bookings.map((booking) => {
+                                  const cancellationInfo = getCancellationInfo(booking);
+                                  const canShowCancellation = !['cancelled', 'completed'].includes(booking.status);
+
+                                  return (
+                                    <div key={booking.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                      {getRoomBookingImage(booking) && (
+                                        <div className="mb-4 overflow-hidden rounded-2xl">
+                                          <img
+                                            src={getRoomBookingImage(booking)}
+                                            alt={getBookingTitle(booking)}
+                                            className="h-44 w-full object-cover"
+                                          />
+                                        </div>
+                                      )}
+                                      <div className="flex items-center justify-between gap-4">
+                                        <div>
+                                          <p className="text-sm text-slate-500">{getBookingType(booking)}</p>
+                                          <p className="mt-1 text-lg font-semibold text-slate-900">{getBookingTitle(booking)}</p>
+                                          {booking.room_details?.room_type && (
+                                            <p className="mt-1 text-sm text-slate-600">
+                                              {booking.room_details.room_type} at {booking.room_details.hotel_name}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <Badge className={getBookingBadgeClass(booking)}>
+                                          {getBookingDisplayStatus(booking)}
+                                        </Badge>
                                       </div>
-                                    )}
-                                    <div className="flex items-center justify-between gap-4">
-                                      <div>
-                                        <p className="text-sm text-slate-500">{getBookingType(booking)}</p>
-                                        <p className="mt-1 text-lg font-semibold text-slate-900">{getBookingTitle(booking)}</p>
-                                        {booking.room_details?.room_type && (
-                                          <p className="mt-1 text-sm text-slate-600">
-                                            {booking.room_details.room_type} at {booking.room_details.hotel_name}
-                                          </p>
-                                        )}
+                                      <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                                        <div><strong>Start:</strong> {booking.start_date}</div>
+                                        {booking.end_date && <div><strong>End:</strong> {booking.end_date}</div>}
+                                        <div><strong>Total:</strong> {booking.total_price}</div>
+                                        {booking.room_details?.capacity && <div><strong>Guests:</strong> {booking.room_details.capacity}</div>}
+                                        {booking.payment_status && <div><strong>Payment:</strong> {booking.payment_status}</div>}
                                       </div>
-                                      <Badge variant={booking.status === 'confirmed' ? 'success' : booking.status === 'pending' ? 'secondary' : 'destructive'}>
-                                        {booking.status}
-                                      </Badge>
+                                      {booking.room_details?.description && (
+                                        <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                                          {booking.room_details.description}
+                                        </p>
+                                      )}
+                                      {canShowCancellation && (
+                                        <div className="mt-4 space-y-2">
+                                          <Button
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={() => handleCancelBooking(booking.id)}
+                                            disabled={!cancellationInfo.canCancel}
+                                          >
+                                            Cancel booking
+                                          </Button>
+                                          {!cancellationInfo.canCancel && cancellationInfo.message && (
+                                            <p className="text-sm text-slate-500">{cancellationInfo.message}</p>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
-                                    <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-                                      <div><strong>Start:</strong> {booking.start_date}</div>
-                                      {booking.end_date && <div><strong>End:</strong> {booking.end_date}</div>}
-                                      <div><strong>Total:</strong> {booking.total_price}</div>
-                                      {booking.room_details?.capacity && <div><strong>Guests:</strong> {booking.room_details.capacity}</div>}
-                                      {booking.payment_status && <div><strong>Payment:</strong> {booking.payment_status}</div>}
-                                    </div>
-                                    {booking.room_details?.description && (
-                                      <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                                        {booking.room_details.description}
-                                      </p>
-                                    )}
-                                    {booking.status !== 'cancelled' && (
-                                      <div className="mt-4">
-                                        <Button
-                                          variant="outline"
-                                          className="w-full"
-                                          onClick={() => handleCancelBooking(booking.id)}
-                                        >
-                                          Cancel booking
-                                        </Button>
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -706,30 +807,43 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                               </div>
                             ) : (
                               <div className="grid gap-4">
-                                {guideBookings.map((gb) => (
-                                  <div key={gb.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                                    <div className="flex items-center justify-between gap-4">
-                                      <div>
-                                        <p className="text-sm text-slate-500">Tour guide booking</p>
-                                        <p className="mt-1 text-lg font-semibold text-slate-900">{gb.guide_display_name}</p>
+                                {guideBookings.map((gb) => {
+                                  const cancellationInfo = getCancellationInfo(gb);
+                                  const canShowCancellation = !['cancelled', 'completed'].includes(gb.status);
+
+                                  return (
+                                    <div key={gb.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                                      <div className="flex items-center justify-between gap-4">
+                                        <div>
+                                          <p className="text-sm text-slate-500">Tour guide booking</p>
+                                          <p className="mt-1 text-lg font-semibold text-slate-900">{gb.guide_display_name}</p>
+                                        </div>
+                                        <Badge className={getBookingBadgeClass(gb)}>
+                                          {getBookingDisplayStatus(gb)}
+                                        </Badge>
                                       </div>
-                                      <Badge variant={gb.status === 'confirmed' ? 'default' : gb.status === 'pending' ? 'secondary' : 'destructive'}>
-                                        {gb.status}
-                                      </Badge>
-                                    </div>
-                                    <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-                                      <div><strong>Dates:</strong> {gb.start_date} → {gb.end_date}</div>
-                                      <div><strong>Total:</strong> Rs. {Number(gb.total_price || 0).toLocaleString('en-IN')}</div>
-                                    </div>
-                                    {gb.status !== 'cancelled' && gb.status !== 'completed' && (
-                                      <div className="mt-4">
-                                        <Button variant="outline" className="w-full" onClick={() => handleCancelGuideBooking(gb.id)}>
-                                          Cancel request
-                                        </Button>
+                                      <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                                        <div><strong>Dates:</strong> {gb.start_date} → {gb.end_date}</div>
+                                        <div><strong>Total:</strong> Rs. {Number(gb.total_price || 0).toLocaleString('en-IN')}</div>
                                       </div>
-                                    )}
-                                  </div>
-                                ))}
+                                      {canShowCancellation && (
+                                        <div className="mt-4 space-y-2">
+                                          <Button
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={() => handleCancelGuideBooking(gb.id)}
+                                            disabled={!cancellationInfo.canCancel}
+                                          >
+                                            Cancel request
+                                          </Button>
+                                          {!cancellationInfo.canCancel && cancellationInfo.message && (
+                                            <p className="text-sm text-slate-500">{cancellationInfo.message}</p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -746,14 +860,14 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                                 <div key={`act-booking-${booking.id}`} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                                   <p className="text-sm text-slate-500">Booking activity</p>
                                   <p className="mt-1 text-base font-semibold text-slate-900">{getBookingTitle(booking)}</p>
-                                  <p className="mt-2 text-sm text-slate-600">Status: {booking.status} · {booking.start_date}</p>
+                                  <p className="mt-2 text-sm text-slate-600">Status: {getBookingDisplayStatus(booking)} · {booking.start_date}</p>
                                 </div>
                               ))}
                               {guideBookings.slice(0, 3).map((gb) => (
                                 <div key={`act-guide-${gb.id}`} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                                   <p className="text-sm text-slate-500">Guide request</p>
                                   <p className="mt-1 text-base font-semibold text-slate-900">{gb.guide_display_name}</p>
-                                  <p className="mt-2 text-sm text-slate-600">Status: {gb.status} · {gb.start_date}</p>
+                                  <p className="mt-2 text-sm text-slate-600">Status: {getBookingDisplayStatus(gb)} · {gb.start_date}</p>
                                 </div>
                               ))}
                             </div>
@@ -806,39 +920,17 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                 </Card>
 
                 <Card className="border border-slate-200 shadow-sm overflow-hidden">
-                  <CardHeader className="space-y-4 border-b border-slate-200 bg-white px-6 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="h-14 w-14 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200">
-                        <img
-                          src={profileImageSrc}
-                          alt={profileDisplayName}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <CardTitle>Manage account</CardTitle>
-                        <CardDescription>Update profile details, contact info, and your profile image.</CardDescription>
-                      </div>
-                    </div>
+                  <CardHeader className="space-y-2 border-b border-slate-200 bg-white px-6 py-6">
+                    <CardTitle>Manage account</CardTitle>
+                    <CardDescription>Update profile details, contact info, and your profile photo.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6 px-6 py-6">
                     <div className="rounded-3xl bg-slate-50 p-5">
-                      <div className="flex items-center gap-4">
-                        <div className="h-20 w-20 overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-200">
-                          <img
-                            src={profileImageSrc}
-                            alt={profileDisplayName}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-base font-semibold text-slate-900">{profileDisplayName}</p>
-                          <p className="text-sm text-slate-500">{profileForm.email || 'Add your email address'}</p>
-                          <p className="text-sm text-slate-500">
-                            {(profileForm.profile_picture || '').trim() ? 'Custom profile image active.' : 'Default profile image generated from your account details.'}
-                          </p>
-                        </div>
-                      </div>
+                      <p className="text-base font-semibold text-slate-900">{profileDisplayName}</p>
+                      <p className="mt-1 text-sm text-slate-500">{profileForm.email || 'Add your email address'}</p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {(profileForm.profile_picture || '').trim() ? 'Custom profile photo active.' : 'Default avatar generated from your account details.'}
+                      </p>
                     </div>
 
                     <div className="grid gap-5">
@@ -889,37 +981,27 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                       <div className="grid gap-2">
                         <Label htmlFor="profile_photo">Profile photo</Label>
                         <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5">
-                          <div className="grid gap-5 lg:grid-cols-[120px_1fr] lg:items-center">
-                            <div className="h-28 w-28 overflow-hidden rounded-[1.75rem] bg-white shadow-sm ring-1 ring-slate-200">
-                              <img
-                                src={profileImageSrc}
-                                alt="Profile preview"
-                                className="h-full w-full object-cover"
-                              />
+                          <div className="grid gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <label
+                                htmlFor="profile_photo"
+                                className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+                              >
+                                Choose File
+                              </label>
+                              <span className="text-sm text-slate-500">{photoFileName || 'No file chosen'}</span>
                             </div>
-
-                            <div className="grid gap-3">
-                              <div className="flex flex-wrap items-center gap-3">
-                                <label
-                                  htmlFor="profile_photo"
-                                  className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
-                                >
-                                  Choose File
-                                </label>
-                                <span className="text-sm text-slate-500">{photoFileName || 'No file chosen'}</span>
-                              </div>
-                              <input
-                                id="profile_photo"
-                                type="file"
-                                accept="image/*"
-                                onChange={handleProfilePhotoUpload}
-                                className="sr-only"
-                              />
-                              <p className="text-sm leading-6 text-slate-500">Upload a square photo or paste an image URL below. If you leave it empty, a default avatar will be shown automatically for email-login accounts.</p>
-                              {!getCloudinaryUploadEnabled() && (
-                                <p className="text-sm leading-6 text-amber-600">Cloudinary env vars are missing, so file upload is disabled. Use the image URL field below.</p>
-                              )}
-                            </div>
+                            <input
+                              id="profile_photo"
+                              type="file"
+                              accept="image/*"
+                              onChange={handleProfilePhotoUpload}
+                              className="sr-only"
+                            />
+                            <p className="text-sm leading-6 text-slate-500">Upload a square photo or paste an image URL below. The main profile avatar updates automatically.</p>
+                            {!getCloudinaryUploadEnabled() && (
+                              <p className="text-sm leading-6 text-amber-600">Cloudinary env vars are missing, so file upload is disabled. Use the image URL field below.</p>
+                            )}
                           </div>
                         </div>
                       </div>

@@ -3,7 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 import base64
+from datetime import datetime, time, timedelta
 import json
+from zoneinfo import ZoneInfo
 from rest_framework_simplejwt.tokens import RefreshToken
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -12,6 +14,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.http import HttpResponseRedirect
+from django.utils import timezone
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.utils.encoding import force_bytes, force_str
@@ -30,6 +33,8 @@ from .esewa_integration import EsewaPaymentGateway
 
 
 PUBLIC_AUTH_ROLES = {'user', 'provider', 'guide'}
+CANCELLATION_CUTOFF_HOURS = 18
+BOOKING_TIME_ZONE = ZoneInfo('Asia/Kathmandu')
 
 
 def build_unique_username(email):
@@ -65,6 +70,24 @@ def normalize_public_auth_role(raw_role):
         return None, 'Admin accounts cannot be created through public authentication', status.HTTP_403_FORBIDDEN
 
     return role, None, None
+
+
+def get_booking_start_datetime(booking):
+    start_datetime = datetime.combine(booking.start_date, time.min)
+    return timezone.make_aware(start_datetime, BOOKING_TIME_ZONE)
+
+
+def get_cancellation_block_reason(booking):
+    now = timezone.now().astimezone(BOOKING_TIME_ZONE)
+    start_at = get_booking_start_datetime(booking)
+
+    if now >= start_at:
+        return "This booking has already started or passed and can't be cancelled."
+
+    if start_at - now <= timedelta(hours=CANCELLATION_CUTOFF_HOURS):
+        return f"Bookings can only be cancelled more than {CANCELLATION_CUTOFF_HOURS} hours before the start date."
+
+    return None
 
 
 def parse_esewa_callback_payload(query_params):
@@ -938,6 +961,10 @@ class BookingDetailView(APIView):
         if status_update:
             if request.user.role == 'user' and status_update not in ['cancelled']:
                 return Response({'error': 'Users can only cancel bookings'}, status=status.HTTP_403_FORBIDDEN)
+            if status_update == 'cancelled':
+                cancellation_error = get_cancellation_block_reason(booking)
+                if cancellation_error:
+                    return Response({'error': cancellation_error}, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = BookingSerializer(booking, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
@@ -1233,6 +1260,10 @@ class GuideBookingDetailView(APIView):
                 return Response({'error': 'Users can only cancel'}, status=status.HTTP_403_FORBIDDEN)
             if request.user.role == 'guide' and status_update not in ['confirmed', 'cancelled', 'completed']:
                 return Response({'error': 'Invalid status for guide'}, status=status.HTTP_403_FORBIDDEN)
+            if status_update == 'cancelled':
+                cancellation_error = get_cancellation_block_reason(booking)
+                if cancellation_error:
+                    return Response({'error': cancellation_error}, status=status.HTTP_400_BAD_REQUEST)
         serializer = GuideBookingSerializer(booking, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
