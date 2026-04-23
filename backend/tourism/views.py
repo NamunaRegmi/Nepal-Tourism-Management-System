@@ -11,10 +11,12 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.http import HttpResponseRedirect
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.utils.encoding import force_bytes, force_str
-from django.db import models
+from django.db import IntegrityError, models
+from urllib.parse import urlparse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .models import User, Destination, Hotel, Room, Booking, Package, TourGuideProfile, GuideBooking
@@ -25,6 +27,44 @@ from .serializers import (
 )
 from .khalti_integration import KhaltiPaymentGateway
 from .esewa_integration import EsewaPaymentGateway
+
+
+PUBLIC_AUTH_ROLES = {'user', 'provider', 'guide'}
+
+
+def build_unique_username(email):
+    normalized_email = (email or '').strip().lower()
+    if (
+        normalized_email
+        and len(normalized_email) <= 150
+        and not User.objects.filter(username=normalized_email).exists()
+    ):
+        return normalized_email
+
+    local_part = (normalized_email.split('@')[0] if normalized_email else 'user') or 'user'
+    base_username = local_part[:150]
+    candidate = base_username
+    counter = 1
+
+    while User.objects.filter(username=candidate).exists():
+        suffix = f'-{counter}'
+        candidate = f"{base_username[:150 - len(suffix)]}{suffix}"
+        counter += 1
+
+    return candidate
+
+
+def normalize_public_auth_role(raw_role):
+    role = (raw_role or 'user').strip().lower()
+    valid_roles = {value for value, _ in User.USER_ROLES}
+
+    if role not in valid_roles:
+        return None, 'Invalid role selected', status.HTTP_400_BAD_REQUEST
+
+    if role not in PUBLIC_AUTH_ROLES:
+        return None, 'Admin accounts cannot be created through public authentication', status.HTTP_403_FORBIDDEN
+
+    return role, None, None
 
 
 def parse_esewa_callback_payload(query_params):
@@ -64,12 +104,44 @@ def parse_esewa_callback_payload(query_params):
     }
 
 
+def get_allowed_frontend_origins():
+    origins = set(getattr(settings, 'CORS_ALLOWED_ORIGINS', []))
+    frontend_base_url = getattr(settings, 'FRONTEND_BASE_URL', '').rstrip('/')
+    if frontend_base_url:
+        origins.add(frontend_base_url)
+    return origins
+
+
+def resolve_frontend_redirect_origin(raw_origin):
+    allowed_origins = get_allowed_frontend_origins()
+    normalized_origin = (raw_origin or '').rstrip('/')
+
+    if normalized_origin and normalized_origin in allowed_origins:
+        return normalized_origin
+
+    frontend_base_url = getattr(settings, 'FRONTEND_BASE_URL', '').rstrip('/')
+    if frontend_base_url:
+        return frontend_base_url
+
+    return normalized_origin or 'http://localhost:5173'
+
+
+def resolve_frontend_redirect_path(raw_path, fallback_path):
+    path = raw_path or fallback_path
+    parsed = urlparse(path)
+    candidate = parsed.path or fallback_path
+
+    if not candidate.startswith('/'):
+        candidate = f'/{candidate}'
+
+    return candidate
+
+
 class GoogleLoginView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request):
         token = request.data.get('credential')
-        selected_role = request.data.get('role', 'user')  # Get role from frontend
         
         try:
             idinfo = id_token.verify_oauth2_token(
@@ -83,22 +155,30 @@ class GoogleLoginView(APIView):
             first_name = idinfo.get('given_name', '')
             last_name = idinfo.get('family_name', '')
             picture = idinfo.get('picture', '')
-            
-            user, created = User.objects.get_or_create(
-                email=email,
-                defaults={
-                    'username': email.split('@')[0],
-                    'first_name': first_name,
-                    'last_name': last_name,
-                    'google_id': google_id,
-                    'profile_picture': picture,
-                    'role': selected_role
-                }
-            )
-            
-            # Update profile picture and role every time
+
+            user = User.objects.filter(email=email).first()
+
+            if user is None:
+                selected_role, role_error, role_status = normalize_public_auth_role(request.data.get('role'))
+                if role_error:
+                    return Response({'error': role_error}, status=role_status)
+
+                user = User.objects.create_user(
+                    username=build_unique_username(email),
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    google_id=google_id,
+                    profile_picture=picture,
+                    role=selected_role,
+                )
+
+            if not user.google_id:
+                user.google_id = google_id
+
             user.profile_picture = picture
-            user.role = selected_role
+            user.first_name = first_name or user.first_name
+            user.last_name = last_name or user.last_name
             user.save()
             
             refresh = RefreshToken.for_user(user)
@@ -120,16 +200,19 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         password = request.data.get('password')
         name = request.data.get('name', '')
-        role = request.data.get('role', 'user')
+        role, role_error, role_status = normalize_public_auth_role(request.data.get('role'))
         
         if not email or not password:
             return Response(
                 {'error': 'Email and password are required'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        if role_error:
+            return Response({'error': role_error}, status=role_status)
         
         if User.objects.filter(email=email).exists():
             return Response(
@@ -137,15 +220,20 @@ class RegisterView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Create user
-        user = User.objects.create_user(
-            username=email.split('@')[0],
-            email=email,
-            password=password,
-            first_name=name.split()[0] if name else '',
-            last_name=' '.join(name.split()[1:]) if len(name.split()) > 1 else '',
-            role=role
-        )
+        try:
+            user = User.objects.create_user(
+                username=build_unique_username(email),
+                email=email,
+                password=password,
+                first_name=name.split()[0] if name else '',
+                last_name=' '.join(name.split()[1:]) if len(name.split()) > 1 else '',
+                role=role
+            )
+        except IntegrityError:
+            return Response(
+                {'error': 'Unable to create account with this email'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Generate tokens
         refresh = RefreshToken.for_user(user)
@@ -1516,7 +1604,22 @@ class EsewaPaymentCallbackView(APIView):
     
     def get(self, request):
         try:
-            callback_data = parse_esewa_callback_payload(request.GET)
+            redirect_origin = resolve_frontend_redirect_origin(request.GET.get('redirect_origin'))
+            requested_redirect_path = request.GET.get('redirect_path')
+            success_redirect_path = resolve_frontend_redirect_path(
+                requested_redirect_path,
+                '/payment/esewa/success',
+            )
+            failure_redirect_path = resolve_frontend_redirect_path(
+                requested_redirect_path if requested_redirect_path and 'failure' in requested_redirect_path else None,
+                '/payment/esewa/failure',
+            )
+
+            redirect_params = request.GET.copy()
+            redirect_params.pop('redirect_origin', None)
+            redirect_params.pop('redirect_path', None)
+
+            callback_data = parse_esewa_callback_payload(redirect_params)
             transaction_uuid = callback_data.get('transaction_uuid')
             transaction_code = callback_data.get('transaction_code')
             total_amount = callback_data.get('total_amount')
@@ -1526,9 +1629,11 @@ class EsewaPaymentCallbackView(APIView):
             print(f"eSewa Callback: transaction_uuid={transaction_uuid}, status={status_param}")
             
             if not transaction_uuid or not total_amount:
-                return Response({
-                    'error': 'Invalid callback parameters'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                failure_query = redirect_params.copy()
+                failure_query['error'] = 'Invalid callback parameters'
+                return HttpResponseRedirect(
+                    f"{redirect_origin}{failure_redirect_path}?{failure_query.urlencode()}"
+                )
             
             # Verify payment with eSewa
             esewa = EsewaPaymentGateway()
@@ -1552,25 +1657,39 @@ class EsewaPaymentCallbackView(APIView):
                         booking.payment_method = 'esewa'
                         booking.status = 'confirmed'
                         booking.save()
-                        
-                        return Response({
-                            'success': True,
-                            'message': 'Payment verified and booking confirmed',
-                            'booking_id': booking.id
-                        })
+
+                        success_query = redirect_params.copy()
+                        success_query['booking_id'] = booking.id
+                        return HttpResponseRedirect(
+                            f"{redirect_origin}{success_redirect_path}?{success_query.urlencode()}"
+                        )
                     except Booking.DoesNotExist:
-                        return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
-                
-                return Response({
-                    'success': True,
-                    'message': 'Payment verified',
-                    'details': verification_response
-                })
-            else:
-                return Response({
-                    'error': 'Payment verification failed',
-                    'details': verification_response
-                }, status=status.HTTP_400_BAD_REQUEST)
+                        failure_query = redirect_params.copy()
+                        failure_query['error'] = 'Booking not found'
+                        return HttpResponseRedirect(
+                            f"{redirect_origin}{failure_redirect_path}?{failure_query.urlencode()}"
+                        )
+
+                return HttpResponseRedirect(
+                    f"{redirect_origin}{success_redirect_path}?{redirect_params.urlencode()}"
+                )
+
+            failure_query = redirect_params.copy()
+            failure_query['error'] = verification_response.get('message', 'Payment verification failed')
+            return HttpResponseRedirect(
+                f"{redirect_origin}{failure_redirect_path}?{failure_query.urlencode()}"
+            )
                 
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            redirect_origin = resolve_frontend_redirect_origin(request.GET.get('redirect_origin'))
+            failure_redirect_path = resolve_frontend_redirect_path(
+                request.GET.get('redirect_path') if request.GET.get('redirect_path') and 'failure' in request.GET.get('redirect_path') else None,
+                '/payment/esewa/failure',
+            )
+            error_query = request.GET.copy()
+            error_query.pop('redirect_origin', None)
+            error_query.pop('redirect_path', None)
+            error_query['error'] = str(e)
+            return HttpResponseRedirect(
+                f"{redirect_origin}{failure_redirect_path}?{error_query.urlencode()}"
+            )

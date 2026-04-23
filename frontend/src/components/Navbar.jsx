@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Mountain, Menu, X, User, LogOut } from 'lucide-react';
+import { Menu, X, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { APP_DATA_CHANGED } from '@/lib/dataSync';
 import { getNavLinksForRole, getStoredUser, getUserRole } from '@/lib/roleNavigation';
@@ -57,13 +57,13 @@ export default function Navbar({ currentPage, onNavigate }) {
           <button
             type="button"
             onClick={() => onNavigate('home')}
-            className="flex items-center gap-2 text-left"
+            className="flex items-center text-left"
           >
-            <Mountain className="h-7 w-7 text-blue-600" />
-            <div>
-              <div className="text-lg font-bold text-slate-900">Nepal Tourism</div>
-              <div className="text-xs text-slate-500">Explore. Book. Travel.</div>
-            </div>
+            <img
+              src="/assets/nepal-tourism-logo.svg"
+              alt="Nepal Tourism logo"
+              className="h-12 w-auto max-w-[210px]"
+            />
           </button>
 
           <nav className="hidden md:flex items-center gap-6">

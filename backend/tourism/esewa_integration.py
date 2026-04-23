@@ -3,6 +3,7 @@ import hmac
 import base64
 import requests
 from django.conf import settings
+from django.utils import timezone
 from .models import Booking
 
 class EsewaPaymentGateway:
@@ -43,8 +44,9 @@ class EsewaPaymentGateway:
         Returns payment form data that frontend will use to submit
         """
         try:
-            # Generate unique transaction UUID
-            transaction_uuid = f"BOOK-{booking.id}-{booking.created_at.strftime('%Y%m%d%H%M%S')}"
+            # eSewa requires a globally unique transaction UUID for every payment attempt.
+            # Using the booking creation time causes duplicate UUIDs when users retry payment.
+            transaction_uuid = f"BOOK-{booking.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
             
             # Amount in rupees (eSewa uses NPR)
             total_amount = str(float(booking.total_price))

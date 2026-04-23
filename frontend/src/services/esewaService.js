@@ -6,6 +6,20 @@ class EsewaService {
    * Based on official eSewa documentation: https://developer.esewa.com.np/
    */
 
+  getApiOrigin() {
+    return new URL(api.defaults.baseURL, window.location.origin).origin;
+  }
+
+  buildCallbackUrl(frontendUrl, fallbackPath) {
+    const targetUrl = new URL(frontendUrl || fallbackPath, window.location.origin);
+    const callbackUrl = new URL('/api/payment/esewa/callback/', this.getApiOrigin());
+
+    callbackUrl.searchParams.set('redirect_origin', targetUrl.origin);
+    callbackUrl.searchParams.set('redirect_path', targetUrl.pathname);
+
+    return callbackUrl.toString();
+  }
+
   /**
    * Initiate eSewa payment for a booking
    * @param {number} bookingId - The booking ID
@@ -16,11 +30,20 @@ class EsewaService {
   async initiatePayment(bookingId, successUrl = null, failureUrl = null) {
     try {
       console.log('Initiating eSewa payment for booking:', bookingId);
+
+      const successCallbackUrl = this.buildCallbackUrl(
+        successUrl,
+        '/payment/esewa/success'
+      );
+      const failureCallbackUrl = this.buildCallbackUrl(
+        failureUrl,
+        '/payment/esewa/failure'
+      );
       
       const response = await api.post('/payment/esewa/initiate/', {
         booking_id: bookingId,
-        success_url: successUrl || `${window.location.origin}/payment/esewa/success`,
-        failure_url: failureUrl || `${window.location.origin}/payment/esewa/failure`
+        success_url: successCallbackUrl,
+        failure_url: failureCallbackUrl
       });
       
       console.log('eSewa initiation response:', response.data);

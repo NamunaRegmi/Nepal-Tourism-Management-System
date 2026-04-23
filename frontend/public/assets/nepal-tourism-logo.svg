@@ -1,0 +1,47 @@
+<svg width="274" height="72" viewBox="0 0 274 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="markSky" x1="8" y1="8" x2="58" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset="0.55" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+    <linearGradient id="markSun" x1="30" y1="15" x2="43" y2="31" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <linearGradient id="markTrail" x1="18" y1="45" x2="48" y2="55" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#ECFEFF"/>
+    </linearGradient>
+    <linearGradient id="wordmark" x1="82" y1="16" x2="251" y2="47" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="0.58" stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="274" height="72" rx="20" fill="#FFFFFF"/>
+  <rect x="6" y="6" width="60" height="60" rx="19" fill="url(#markSky)"/>
+  <path d="M23 10.5C30.4 7.5 39.1 7.7 47 11.1C39.6 10.4 30.1 11 23 10.5Z" fill="#A7F3D0" opacity="0.25"/>
+  <circle cx="43" cy="25" r="8.8" fill="url(#markSun)"/>
+  <path d="M14 45.5L28.6 25.7C29.5 24.5 31.3 24.6 32.2 25.8L39.7 36.6L45.4 29.3C46.3 28.1 48.1 28.3 48.9 29.6L58 45.5H14Z" fill="#EFF6FF"/>
+  <path d="M25.2 45.5L32.2 36.7L37.5 45.5H25.2Z" fill="#BAE6FD"/>
+  <path d="M28.6 25.7L21.8 34.9L29.4 31.7L34.3 36L32.2 25.8C31.3 24.6 29.5 24.5 28.6 25.7Z" fill="#FFFFFF"/>
+  <path d="M45.4 29.3L39.7 36.6L45.5 34L50.4 38L48.9 29.6C48.1 28.3 46.3 28.1 45.4 29.3Z" fill="#FFFFFF"/>
+  <path d="M15.5 45.4H56C53.5 51.8 46.5 58 36.8 58C27.5 58 19.6 53.1 15.5 45.4Z" fill="#075985" opacity="0.38"/>
+  <path d="M19 50.7C27.8 45.8 38.4 46.4 51 51.1" stroke="url(#markTrail)" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M19 50.7C27 54.3 37 54.2 51 51.1" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round" opacity="0.86"/>
+  <path d="M20 17V30.2" stroke="#F8FAFC" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M20.5 17.2L32 20.2L20.5 23.2V17.2Z" fill="#DC2626"/>
+  <path d="M32 20.2L25.7 22L27.8 20.8L25.8 18.9L32 20.2Z" fill="#FACC15"/>
+  <rect x="6" y="6" width="60" height="60" rx="19" stroke="#FFFFFF" stroke-opacity="0.74" stroke-width="2"/>
+
+  <text x="82" y="32" fill="url(#wordmark)" font-family="Georgia, 'Times New Roman', serif" font-size="22" font-weight="700" letter-spacing="0.2">
+    Nepal Tourism
+  </text>
+  <text x="84" y="51" fill="#64748B" font-family="Verdana, Geneva, sans-serif" font-size="10.8" font-weight="700" letter-spacing="2.4">
+    EXPLORE BOOK TRAVEL
+  </text>
+  <path d="M82 58.5C125.5 54.8 176.1 56.6 228 59.3" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <circle cx="237" cy="59" r="3.5" fill="#DC2626"/>
+</svg>

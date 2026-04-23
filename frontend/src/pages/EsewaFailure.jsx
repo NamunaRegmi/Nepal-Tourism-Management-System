@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { XCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -6,6 +7,11 @@ export default function EsewaFailure({ onNavigate }) {
   const urlParams = new URLSearchParams(window.location.search);
   const transactionUuid = urlParams.get('transaction_uuid');
   const productCode = urlParams.get('product_code');
+  const error = urlParams.get('error');
+
+  useEffect(() => {
+    localStorage.removeItem('esewa_booking_id');
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -16,7 +22,7 @@ export default function EsewaFailure({ onNavigate }) {
           </div>
           <CardTitle className="text-red-600">Payment Failed</CardTitle>
           <CardDescription>
-            Your eSewa payment was not completed. Please try again.
+            {error || 'Your eSewa payment was not completed. Please try again.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

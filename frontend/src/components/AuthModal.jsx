@@ -23,8 +23,14 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
   });
   const [error, setError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const isAdminRole = selectedRole === 'admin';
 
   const handleGoogleSuccess = async (credentialResponse) => {
+    if (isAdminRole) {
+      setError('Admin accounts must sign in with an existing email and password.');
+      return;
+    }
+
     try {
       const response = await axios.post('http://127.0.0.1:8000/api/auth/google/', {
         credential: credentialResponse.credential,
@@ -73,6 +79,11 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
     }
 
     if (isSignup) {
+      if (isAdminRole) {
+        setError('Admin accounts cannot be created from the public sign-up form.');
+        return;
+      }
+
       if (formData.password !== formData.confirmPassword) {
         setError('Passwords do not match');
         return;
@@ -231,16 +242,22 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
                 </Button>
               </div>
 
-              <Tabs defaultValue="login" className="w-full">
+              {isAdminRole && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Admin accounts are provisioned separately. Use your existing email and password to sign in.
+                </div>
+              )}
+
+              <Tabs key={selectedRole} defaultValue="login" className="w-full">
                 {error && (
                   <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                     <p className="text-red-600 text-sm">{error}</p>
                   </div>
                 )}
 
-                <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsList className={`grid w-full mb-4 ${isAdminRole ? 'grid-cols-1' : 'grid-cols-2'}`}>
                   <TabsTrigger value="login">Login</TabsTrigger>
-                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
+                  {!isAdminRole && <TabsTrigger value="signup">Sign Up</TabsTrigger>}
                 </TabsList>
 
                 <TabsContent value="login" className="space-y-4">
@@ -287,21 +304,26 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
                     <div className="absolute inset-0 flex items-center">
                       <span className="w-full border-t border-gray-200" />
                     </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-slate-50 px-2 text-gray-500">Or continue with</span>
-                    </div>
+                    {!isAdminRole && (
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-slate-50 px-2 text-gray-500">Or continue with</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex justify-center">
-                    <GoogleLogin
-                      onSuccess={handleGoogleSuccess}
-                      onError={() => setError('Google Login Failed')}
-                      useOneTap
-                    />
-                  </div>
+                  {!isAdminRole && (
+                    <div className="flex justify-center">
+                      <GoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={() => setError('Google Login Failed')}
+                        useOneTap
+                      />
+                    </div>
+                  )}
                 </TabsContent>
 
-                <TabsContent value="signup" className="space-y-4">
+                {!isAdminRole && (
+                  <TabsContent value="signup" className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name</Label>
                     <Input
@@ -352,7 +374,8 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
                   >
                     Sign Up
                   </Button>
-                </TabsContent>
+                  </TabsContent>
+                )}
               </Tabs>
             </div>
           )}
