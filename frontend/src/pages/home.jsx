@@ -1,6 +1,4 @@
-import { Mountain, MapPin, Calendar, Star, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Mountain, MapPin, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { destinationService } from '@/services/api';
 import { useAppDataSync } from '@/lib/dataSync';
@@ -298,63 +296,6 @@ const Home = ({ onNavigate, onSelectDestination }) => {
           </div>
         </div>
       </section>
-
-      {/* Nepal-themed Footer */}
-      <footer className="bg-gradient-to-r from-slate-800 to-slate-900 text-white mt-16">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="text-center mb-8">
-            <h4 className="text-2xl font-bold mb-4">
-              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                Start Your Nepal Adventure
-              </span>
-            </h4>
-            <div className="w-24 h-1 bg-gradient-to-r from-blue-400 to-cyan-400 mx-auto mb-6 rounded-full"></div>
-            <p className="text-lg opacity-90 max-w-2xl mx-auto">
-              Explore. Book. Travel.
-            </p>
-            <p className="text-lg opacity-90 max-w-2xl mx-auto">
-              Discover amazing destinations, book your perfect trip, and experience the beauty of Nepal with our trusted travel services.
-            </p>
-          </div>
-
-          {/* Feature Boxes */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 text-center hover:bg-white/20 transition-all duration-300">
-              <MapPin className="w-8 h-8 text-blue-400 mx-auto mb-3" />
-              <h4 className="font-semibold text-lg mb-2 text-white">Top Destinations</h4>
-              <p className="text-sm opacity-80 text-white">Explore the best places</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 text-center hover:bg-white/20 transition-all duration-300">
-              <Calendar className="w-8 h-8 text-blue-400 mx-auto mb-3" />
-              <h4 className="font-semibold text-lg mb-2 text-white">Easy Booking</h4>
-              <p className="text-sm opacity-80 text-white">Quick & simple</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 text-center hover:bg-white/20 transition-all duration-300">
-              <Mountain className="w-8 h-8 text-blue-400 mx-auto mb-3" />
-              <h4 className="font-semibold text-lg mb-2 text-white">Best Prices</h4>
-              <p className="text-sm opacity-80 text-white">Great value guaranteed</p>
-            </div>
-          </div>
-
-          {/* Bottom Links */}
-          <div className="border-t border-white/20 pt-8 text-center">
-            <p className="text-sm opacity-70 mb-4">
-              © 2026 Nepal Tourism Management System. All rights reserved. | Privacy Policy | Terms of Service | Contact Us
-            </p>
-            <div className="flex justify-center gap-6 text-sm">
-              <button type="button" onClick={() => onNavigate('about')} className="hover:text-blue-200 transition-colors text-white">
-                About Us
-              </button>
-              <button type="button" onClick={() => onNavigate('about')} className="hover:text-blue-200 transition-colors text-white">
-                Support
-              </button>
-              <button type="button" onClick={() => onNavigate('tours')} className="hover:text-blue-200 transition-colors text-white">
-                Partners
-              </button>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

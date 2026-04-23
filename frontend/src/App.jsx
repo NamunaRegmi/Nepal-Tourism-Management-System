@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import Home from './pages/home';
 import { getLandingPageForRole, getStoredUser, getUserRole, isDashboardPage } from './lib/roleNavigation';
 
@@ -332,6 +333,10 @@ export default function App() {
   };
 
   const hideGlobalNavbar = isDashboardPage(currentPage);
+  const hideGlobalFooter =
+    hideGlobalNavbar ||
+    browserLocation.pathname.startsWith('/payment') ||
+    browserLocation.pathname.startsWith('/reset-password');
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -341,6 +346,7 @@ export default function App() {
           {renderPage()}
         </Suspense>
       </main>
+      {!hideGlobalFooter && <Footer onNavigate={handleNavigate} />}
       {isAuthModalOpen && (
         <Suspense fallback={null}>
           <AuthModal 
