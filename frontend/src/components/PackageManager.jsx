@@ -11,8 +11,7 @@ import { packageService } from '@/services/api';
 import { createObjectPreview, getCloudinaryUploadEnabled, uploadImageToCloudinary } from '@/services/cloudinary';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
-
-const DEFAULT_PACKAGE_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800';
+import { DEFAULT_IMAGES, GRADIENTS, BUTTON_STYLES, DEFAULTS, PLACEHOLDERS } from '@/config/constants';
 
 const PackageManager = () => {
   const [packages, setPackages] = useState([]);
@@ -142,11 +141,11 @@ const PackageManager = () => {
         description: packageForm.description.trim(),
         price: packageForm.price,
         duration_days: packageForm.duration_days,
-        max_people: packageForm.max_people || 10,
+        max_people: packageForm.max_people || DEFAULTS.maxPeople,
         destination: packageForm.destination.trim(),
         itinerary: packageForm.itinerary.trim(),
         included_services: packageForm.included_services.trim(),
-        image: imageUrl || DEFAULT_PACKAGE_IMAGE,
+        image: imageUrl || DEFAULT_IMAGES.package,
       };
 
       if (isAdding) {
@@ -186,14 +185,20 @@ const PackageManager = () => {
     
     setDeleting(true);
     try {
-      await packageService.delete(packageToDelete.id);
+      console.log('Deleting package:', packageToDelete.id);
+      const response = await packageService.delete(packageToDelete.id);
+      console.log('Delete response:', response);
       toast.success(`${packageToDelete.name} deleted successfully!`);
       setDeleteDialogOpen(false);
       setPackageToDelete(null);
       fetchPackages();
     } catch (error) {
       console.error('Failed to delete package:', error);
-      toast.error(error.response?.data?.error || 'Could not delete this package.');
+      console.error('Error response:', error.response);
+      console.error('Error data:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Could not delete this package.';
+      toast.error(errorMessage);
     } finally {
       setDeleting(false);
     }
@@ -229,7 +234,7 @@ const PackageManager = () => {
             </div>
             <Button 
               type="button"
-              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 pointer-events-auto cursor-pointer z-10"
+              className={`${BUTTON_STYLES.secondary} pointer-events-auto cursor-pointer z-10`}
               onClick={handleAddPackage}
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -265,7 +270,7 @@ const PackageManager = () => {
                 <Card key={pkg.id} className="hover:shadow-lg transition-shadow overflow-hidden">
                   <div className="relative h-48 overflow-hidden">
                     <img
-                      src={pkg.image || DEFAULT_PACKAGE_IMAGE}
+                      src={pkg.image || DEFAULT_IMAGES.package}
                       alt={pkg.name}
                       className="w-full h-full object-cover"
                     />
@@ -377,7 +382,7 @@ const PackageManager = () => {
                   type="number"
                   value={packageForm.max_people}
                   onChange={(e) => setPackageForm({...packageForm, max_people: e.target.value})}
-                  placeholder="e.g., 10"
+                  placeholder={PLACEHOLDERS.maxPeople}
                 />
               </div>
             </div>
@@ -399,7 +404,7 @@ const PackageManager = () => {
                 id="itinerary"
                 value={packageForm.itinerary}
                 onChange={(e) => setPackageForm({...packageForm, itinerary: e.target.value})}
-                placeholder="Day 1: Arrival in Kathmandu&#10;Day 2: Fly to Lukla..."
+                placeholder={PLACEHOLDERS.itinerary}
                 rows={4}
               />
             </div>
@@ -443,7 +448,7 @@ const PackageManager = () => {
                 id="package_image_url"
                 value={packageForm.image}
                 onChange={(e) => setPackageForm({ ...packageForm, image: e.target.value })}
-                placeholder="https://example.com/package-image.jpg"
+                placeholder={PLACEHOLDERS.imageUrl}
               />
             </div>
           </div>
@@ -462,7 +467,7 @@ const PackageManager = () => {
                 saving ||
                 (imageFile && !getCloudinaryUploadEnabled())
               }
-              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
+              className={BUTTON_STYLES.secondary}
             >
               <Save className="h-4 w-4 mr-2" />
               {saving ? 'Saving...' : isAdding ? 'Add Package' : 'Update Package'}
@@ -476,8 +481,8 @@ const PackageManager = () => {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
+              <div className={`${DEFAULTS.avatarSize.small} rounded-full bg-red-100 flex items-center justify-center`}>
+                <AlertTriangle className={`${DEFAULTS.iconSize.medium} text-red-600`} />
               </div>
               <div>
                 <DialogTitle>Delete Package</DialogTitle>

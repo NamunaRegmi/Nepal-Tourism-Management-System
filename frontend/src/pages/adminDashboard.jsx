@@ -27,6 +27,8 @@ const AdminDashboard = ({ onNavigate }) => {
   const [users, setUsers] = useState([]);
   const [providers, setProviders] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [packages, setPackages] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userDialogOpen, setUserDialogOpen] = useState(false);
@@ -45,13 +47,39 @@ const AdminDashboard = ({ onNavigate }) => {
     profile_picture: '',
   });
   const [savingProfile, setSavingProfile] = useState(false);
+  const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
+  const [editUserForm, setEditUserForm] = useState({
+    id: null,
+    username: '',
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    is_active: true,
+  });
+  const [savingUser, setSavingUser] = useState(false);
+  const [editProviderDialogOpen, setEditProviderDialogOpen] = useState(false);
+  const [editProviderForm, setEditProviderForm] = useState({
+    id: null,
+    username: '',
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    company_name: '',
+    is_active: true,
+  });
+  const [savingProvider, setSavingProvider] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
 
+      console.log('Fetching admin dashboard data...');
+
       const profileResponse = await authService.getProfile();
       if (profileResponse.data) {
+        console.log('Admin profile:', profileResponse.data);
         setAdminProfile(profileResponse.data);
         setProfileForm({
           username: profileResponse.data.username || '',
@@ -66,29 +94,93 @@ const AdminDashboard = ({ onNavigate }) => {
       
       // Fetch dashboard stats
       const statsResponse = await adminService.getStats();
+      console.log('Stats response:', statsResponse.data);
       if (statsResponse.data) {
         setDashboardStats(statsResponse.data);
       }
 
       // Fetch users
       const usersResponse = await adminService.getAllUsers();
+      console.log('Users response:', usersResponse.data);
       if (usersResponse.data) {
         setUsers(usersResponse.data);
       }
 
       // Fetch providers
       const providersResponse = await adminService.getAllProviders();
+      console.log('Providers response:', providersResponse.data);
       if (providersResponse.data) {
         setProviders(providersResponse.data);
       }
 
       // Fetch bookings
       const bookingsResponse = await adminService.getAllBookings();
+      console.log('Bookings response:', bookingsResponse.data);
       if (bookingsResponse.data) {
         setBookings(bookingsResponse.data);
       }
+
+      // Fetch packages
+      const packagesResponse = await adminService.getAllPackages();
+      console.log('Packages response:', packagesResponse.data);
+      if (packagesResponse.data) {
+        setPackages(packagesResponse.data);
+      }
+
+      // Build recent activity from actual data
+      const activities = [];
+      
+      // Add recent users (last 5)
+      if (usersResponse.data) {
+        usersResponse.data.slice(0, 5).forEach(user => {
+          activities.push({
+            id: `user-${user.id}`,
+            user: user.username,
+            action: 'Registered as User',
+            time: new Date(user.date_joined).toLocaleString(),
+            type: 'user',
+            timestamp: new Date(user.date_joined).getTime()
+          });
+        });
+      }
+
+      // Add recent providers (last 5)
+      if (providersResponse.data) {
+        providersResponse.data.slice(0, 5).forEach(provider => {
+          activities.push({
+            id: `provider-${provider.id}`,
+            user: provider.company_name || provider.username,
+            action: 'Registered as Provider',
+            time: new Date(provider.date_joined).toLocaleString(),
+            type: 'provider',
+            timestamp: new Date(provider.date_joined).getTime()
+          });
+        });
+      }
+
+      // Add recent bookings (last 5)
+      if (bookingsResponse.data) {
+        bookingsResponse.data.slice(0, 5).forEach(booking => {
+          const itemName = booking.room_details?.room_type || booking.package_details?.name || 'Item';
+          activities.push({
+            id: `booking-${booking.id}`,
+            user: booking.user?.username || 'User',
+            action: `Booked ${itemName}`,
+            time: new Date(booking.created_at).toLocaleString(),
+            type: 'booking',
+            timestamp: new Date(booking.created_at).getTime()
+          });
+        });
+      }
+
+      // Sort by timestamp (most recent first) and take top 10
+      activities.sort((a, b) => b.timestamp - a.timestamp);
+      setRecentActivity(activities.slice(0, 10));
+
     } catch (error) {
       console.error("Failed to fetch admin data:", error);
+      console.error("Error details:", error.response?.data);
+      console.error("Error status:", error.response?.status);
     } finally {
       setLoading(false);
     }
@@ -104,8 +196,6 @@ const AdminDashboard = ({ onNavigate }) => {
     { 
       title: "Total Users", 
       value: dashboardStats.total_users.toLocaleString(), 
-      change: "+12%", 
-      changeType: "increase",
       desc: "Registered Accounts", 
       icon: Users, 
       color: "blue",
@@ -116,8 +206,6 @@ const AdminDashboard = ({ onNavigate }) => {
     { 
       title: "Service Providers", 
       value: dashboardStats.total_providers.toLocaleString(), 
-      change: "+8%", 
-      changeType: "increase",
       desc: "Active Providers", 
       icon: Building2, 
       color: "green",
@@ -126,11 +214,9 @@ const AdminDashboard = ({ onNavigate }) => {
       borderColor: "border-green-200"
     },
     {
-      title: "Tour guides",
+      title: "Tour Guides",
       value: (dashboardStats.total_guides ?? 0).toLocaleString(),
-      change: "+5%",
-      changeType: "increase",
-      desc: "Registered guides",
+      desc: "Registered Guides",
       icon: MapPin,
       color: "teal",
       bgColor: "bg-teal-50",
@@ -140,8 +226,6 @@ const AdminDashboard = ({ onNavigate }) => {
     { 
       title: "Total Bookings", 
       value: dashboardStats.total_bookings.toLocaleString(), 
-      change: "+23%", 
-      changeType: "increase",
       desc: "All Time", 
       icon: Package, 
       color: "purple",
@@ -150,11 +234,29 @@ const AdminDashboard = ({ onNavigate }) => {
       borderColor: "border-purple-200"
     },
     { 
+      title: "Tour Packages", 
+      value: (dashboardStats.total_packages ?? 0).toLocaleString(), 
+      desc: "Active Packages", 
+      icon: Package, 
+      color: "indigo",
+      bgColor: "bg-indigo-50",
+      iconColor: "text-indigo-600",
+      borderColor: "border-indigo-200"
+    },
+    { 
+      title: "Hotels", 
+      value: (dashboardStats.total_hotels ?? 0).toLocaleString(), 
+      desc: "Active Hotels", 
+      icon: Building2, 
+      color: "cyan",
+      bgColor: "bg-cyan-50",
+      iconColor: "text-cyan-600",
+      borderColor: "border-cyan-200"
+    },
+    { 
       title: "Revenue", 
       value: `Rs. ${Number(dashboardStats.revenue || 0).toLocaleString('en-IN')}`, 
-      change: "+18%", 
-      changeType: "increase",
-      desc: "Stays & packages (confirmed)", 
+      desc: "Stays & Packages (Confirmed)", 
       icon: DollarSign, 
       color: "amber",
       bgColor: "bg-amber-50",
@@ -162,23 +264,19 @@ const AdminDashboard = ({ onNavigate }) => {
       borderColor: "border-amber-200"
     },
     {
-      title: "Guide bookings",
+      title: "Guide Bookings",
       value: (dashboardStats.total_guide_bookings ?? 0).toLocaleString(),
-      change: "+10%",
-      changeType: "increase",
-      desc: "Tour guide requests",
+      desc: "Tour Guide Requests",
       icon: Calendar,
-      color: "indigo",
-      bgColor: "bg-indigo-50",
-      iconColor: "text-indigo-600",
-      borderColor: "border-indigo-200"
+      color: "rose",
+      bgColor: "bg-rose-50",
+      iconColor: "text-rose-600",
+      borderColor: "border-rose-200"
     },
     {
-      title: "Guide revenue",
+      title: "Guide Revenue",
       value: `Rs. ${Number(dashboardStats.guide_revenue || 0).toLocaleString('en-IN')}`,
-      change: "+12%",
-      changeType: "increase",
-      desc: "Confirmed guide trips",
+      desc: "Confirmed Guide Trips",
       icon: DollarSign,
       color: "emerald",
       bgColor: "bg-emerald-50",
@@ -187,27 +285,133 @@ const AdminDashboard = ({ onNavigate }) => {
     },
   ];
 
-  const recentActivity = [
-    { id: 1, user: "John Doe", action: "Registered", time: "2 hours ago", type: "user" },
-    { id: 2, user: "Travel Nepal Pvt Ltd", action: "New Provider Application", time: "4 hours ago", type: "provider" },
-    { id: 3, user: "Jane Smith", action: "Booked Everest Tour", time: "6 hours ago", type: "booking" },
-    { id: 4, user: "Mountain Guides", action: "Updated Package", time: "8 hours ago", type: "provider" },
-  ];
-
   const handleUserAction = async (action, user) => {
     try {
       if (action === 'view') {
         setSelectedUser(user);
         setUserDialogOpen(true);
+      } else if (action === 'edit') {
+        setEditUserForm({
+          id: user.id,
+          username: user.username || '',
+          first_name: user.first_name || '',
+          last_name: user.last_name || '',
+          email: user.email || '',
+          phone: user.phone || '',
+          is_active: user.is_active !== undefined ? user.is_active : true,
+        });
+        setEditUserDialogOpen(true);
       } else if (action === 'delete') {
         if (window.confirm(`Are you sure you want to delete user ${user.username}?`)) {
           await adminService.deleteUser(user.id);
           setUsers(users.filter(u => u.id !== user.id));
+          await fetchDashboardData();
           notifyAppDataChanged();
         }
+      } else if (action === 'toggle-active') {
+        await adminService.updateUser(user.id, { is_active: !user.is_active });
+        setUsers(users.map(u => u.id === user.id ? { ...u, is_active: !u.is_active } : u));
+        await fetchDashboardData();
+        notifyAppDataChanged();
       }
     } catch (error) {
       console.error('User action failed:', error);
+      window.alert(error.response?.data?.error || 'Action failed');
+    }
+  };
+
+  const handleSaveUser = async () => {
+    try {
+      if (!editUserForm.username.trim() || !editUserForm.email.trim()) {
+        window.alert('Username and email are required.');
+        return;
+      }
+
+      setSavingUser(true);
+      await adminService.updateUser(editUserForm.id, {
+        username: editUserForm.username.trim(),
+        first_name: editUserForm.first_name.trim(),
+        last_name: editUserForm.last_name.trim(),
+        email: editUserForm.email.trim(),
+        phone: editUserForm.phone.trim(),
+        is_active: editUserForm.is_active,
+      });
+      
+      setUsers(users.map(u => u.id === editUserForm.id ? { ...u, ...editUserForm } : u));
+      setEditUserDialogOpen(false);
+      await fetchDashboardData();
+      notifyAppDataChanged();
+    } catch (error) {
+      console.error('User update failed:', error);
+      window.alert(error.response?.data ? JSON.stringify(error.response.data) : 'Could not update user.');
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleProviderAction = async (action, provider) => {
+    try {
+      if (action === 'view') {
+        setSelectedUser(provider);
+        setUserDialogOpen(true);
+      } else if (action === 'edit') {
+        setEditProviderForm({
+          id: provider.id,
+          username: provider.username || '',
+          first_name: provider.first_name || '',
+          last_name: provider.last_name || '',
+          email: provider.email || '',
+          phone: provider.phone || '',
+          company_name: provider.company_name || '',
+          is_active: provider.is_active !== undefined ? provider.is_active : true,
+        });
+        setEditProviderDialogOpen(true);
+      } else if (action === 'delete') {
+        if (window.confirm(`Are you sure you want to delete provider ${provider.username}?`)) {
+          await adminService.deleteProvider(provider.id);
+          setProviders(providers.filter(p => p.id !== provider.id));
+          await fetchDashboardData();
+          notifyAppDataChanged();
+        }
+      } else if (action === 'toggle-active') {
+        await adminService.updateProvider(provider.id, { is_active: !provider.is_active });
+        setProviders(providers.map(p => p.id === provider.id ? { ...p, is_active: !p.is_active } : p));
+        await fetchDashboardData();
+        notifyAppDataChanged();
+      }
+    } catch (error) {
+      console.error('Provider action failed:', error);
+      window.alert(error.response?.data?.error || 'Action failed');
+    }
+  };
+
+  const handleSaveProvider = async () => {
+    try {
+      if (!editProviderForm.username.trim() || !editProviderForm.email.trim()) {
+        window.alert('Username and email are required.');
+        return;
+      }
+
+      setSavingProvider(true);
+      await adminService.updateProvider(editProviderForm.id, {
+        username: editProviderForm.username.trim(),
+        first_name: editProviderForm.first_name.trim(),
+        last_name: editProviderForm.last_name.trim(),
+        email: editProviderForm.email.trim(),
+        phone: editProviderForm.phone.trim(),
+        company_name: editProviderForm.company_name.trim(),
+        is_active: editProviderForm.is_active,
+      });
+      
+      setProviders(providers.map(p => p.id === editProviderForm.id ? { ...p, ...editProviderForm } : p));
+      setEditProviderDialogOpen(false);
+      await fetchDashboardData();
+      notifyAppDataChanged();
+    } catch (error) {
+      console.error('Provider update failed:', error);
+      window.alert(error.response?.data ? JSON.stringify(error.response.data) : 'Could not update provider.');
+    } finally {
+      setSavingProvider(false);
     }
   };
 
@@ -421,6 +625,14 @@ const AdminDashboard = ({ onNavigate }) => {
             </Button>
             <Button 
               variant="ghost" 
+              className={`w-full justify-start ${activeTab === 'packages' ? 'text-blue-600 bg-blue-50' : ''}`}
+              onClick={() => setActiveTab('packages')}
+            >
+              <Package className="h-4 w-4 mr-3" />
+              Manage Packages ({packages.length})
+            </Button>
+            <Button 
+              variant="ghost" 
               className={`w-full justify-start ${activeTab === 'reports' ? 'text-blue-600 bg-blue-50' : ''}`}
               onClick={() => setActiveTab('reports')}
             >
@@ -448,7 +660,7 @@ const AdminDashboard = ({ onNavigate }) => {
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {stats.map((stat, index) => (
                     <Card key={index} className={`${stat.bgColor} ${stat.borderColor} border-2`}>
                       <CardContent className="p-6">
@@ -457,12 +669,7 @@ const AdminDashboard = ({ onNavigate }) => {
                             <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                             <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
                             <div className="flex items-center mt-2">
-                              <span className={`text-sm font-medium ${
-                                stat.changeType === 'increase' ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {stat.change}
-                              </span>
-                              <span className="text-sm text-gray-500 ml-2">{stat.desc}</span>
+                              <span className="text-sm text-gray-500">{stat.desc}</span>
                             </div>
                           </div>
                           <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
@@ -550,14 +757,33 @@ const AdminDashboard = ({ onNavigate }) => {
                                   variant="ghost" 
                                   size="sm"
                                   onClick={() => handleUserAction('view', user)}
+                                  title="View Details"
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
                                 <Button 
                                   variant="ghost" 
                                   size="sm"
+                                  onClick={() => handleUserAction('edit', user)}
+                                  title="Edit User"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleUserAction('toggle-active', user)}
+                                  title={user.is_active ? 'Deactivate' : 'Activate'}
+                                  className={user.is_active ? 'text-orange-600 hover:text-orange-800' : 'text-green-600 hover:text-green-800'}
+                                >
+                                  {user.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
                                   onClick={() => handleUserAction('delete', user)}
                                   className="text-red-600 hover:text-red-800"
+                                  title="Delete User"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -608,11 +834,91 @@ const AdminDashboard = ({ onNavigate }) => {
                             </TableCell>
                             <TableCell>
                               <div className="flex space-x-2">
-                                <Button variant="ghost" size="sm">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleProviderAction('view', provider)}
+                                  title="View Details"
+                                >
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="sm">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleProviderAction('edit', provider)}
+                                  title="Edit Provider"
+                                >
                                   <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleProviderAction('toggle-active', provider)}
+                                  title={provider.is_active ? 'Deactivate' : 'Activate'}
+                                  className={provider.is_active ? 'text-orange-600 hover:text-orange-800' : 'text-green-600 hover:text-green-800'}
+                                >
+                                  {provider.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleProviderAction('delete', provider)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Delete Provider"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Packages Tab */}
+            {activeTab === 'packages' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Manage Tour Packages</CardTitle>
+                  <CardDescription>View all tour packages from all providers</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="text-center py-8">Loading packages...</div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Package Name</TableHead>
+                          <TableHead>Provider</TableHead>
+                          <TableHead>Price</TableHead>
+                          <TableHead>Duration</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {packages.map((pkg) => (
+                          <TableRow key={pkg.id}>
+                            <TableCell>{pkg.id}</TableCell>
+                            <TableCell className="font-medium">{pkg.name}</TableCell>
+                            <TableCell>{pkg.provider_details?.username || 'N/A'}</TableCell>
+                            <TableCell>Rs. {Number(pkg.price).toLocaleString('en-IN')}</TableCell>
+                            <TableCell>{pkg.duration_days} days</TableCell>
+                            <TableCell>
+                              <Badge className={pkg.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                                {pkg.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-4 w-4" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -934,6 +1240,158 @@ const AdminDashboard = ({ onNavigate }) => {
             </Button>
             <Button onClick={handleSaveProfile} disabled={!profileForm.username.trim() || !profileForm.email.trim() || savingProfile}>
               {savingProfile ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-user-username">Username</Label>
+              <Input
+                id="edit-user-username"
+                value={editUserForm.username}
+                onChange={(e) => setEditUserForm({ ...editUserForm, username: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-user-first-name">First Name</Label>
+                <Input
+                  id="edit-user-first-name"
+                  value={editUserForm.first_name}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, first_name: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-user-last-name">Last Name</Label>
+                <Input
+                  id="edit-user-last-name"
+                  value={editUserForm.last_name}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, last_name: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-user-email">Email</Label>
+              <Input
+                id="edit-user-email"
+                type="email"
+                value={editUserForm.email}
+                onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-user-phone">Phone</Label>
+              <Input
+                id="edit-user-phone"
+                value={editUserForm.phone}
+                onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="edit-user-active"
+                checked={editUserForm.is_active}
+                onChange={(e) => setEditUserForm({ ...editUserForm, is_active: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="edit-user-active">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUserDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveUser} disabled={!editUserForm.username.trim() || !editUserForm.email.trim() || savingUser}>
+              {savingUser ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Provider Dialog */}
+      <Dialog open={editProviderDialogOpen} onOpenChange={setEditProviderDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Provider</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-provider-username">Username</Label>
+              <Input
+                id="edit-provider-username"
+                value={editProviderForm.username}
+                onChange={(e) => setEditProviderForm({ ...editProviderForm, username: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-provider-company">Company Name</Label>
+              <Input
+                id="edit-provider-company"
+                value={editProviderForm.company_name}
+                onChange={(e) => setEditProviderForm({ ...editProviderForm, company_name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-provider-first-name">First Name</Label>
+                <Input
+                  id="edit-provider-first-name"
+                  value={editProviderForm.first_name}
+                  onChange={(e) => setEditProviderForm({ ...editProviderForm, first_name: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-provider-last-name">Last Name</Label>
+                <Input
+                  id="edit-provider-last-name"
+                  value={editProviderForm.last_name}
+                  onChange={(e) => setEditProviderForm({ ...editProviderForm, last_name: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-provider-email">Email</Label>
+              <Input
+                id="edit-provider-email"
+                type="email"
+                value={editProviderForm.email}
+                onChange={(e) => setEditProviderForm({ ...editProviderForm, email: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-provider-phone">Phone</Label>
+              <Input
+                id="edit-provider-phone"
+                value={editProviderForm.phone}
+                onChange={(e) => setEditProviderForm({ ...editProviderForm, phone: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="edit-provider-active"
+                checked={editProviderForm.is_active}
+                onChange={(e) => setEditProviderForm({ ...editProviderForm, is_active: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="edit-provider-active">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditProviderDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveProvider} disabled={!editProviderForm.username.trim() || !editProviderForm.email.trim() || savingProvider}>
+              {savingProvider ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

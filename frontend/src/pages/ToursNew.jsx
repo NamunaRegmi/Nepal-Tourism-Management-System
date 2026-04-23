@@ -6,14 +6,17 @@ import { Badge } from '@/components/ui/badge';
 import PackageBookingModal from '@/components/PackageBookingModal';
 import { packageService } from '@/services/api';
 import { useAppDataSync } from '@/lib/dataSync';
-
-const FALLBACK_TOUR_IMAGE = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80';
+import { DEFAULT_IMAGES, GRADIENTS, BUTTON_STYLES, CURRENCY, COLORS } from '@/config/constants';
 
 const formatCurrency = (value) =>
-  `Rs. ${Number(value || 0).toLocaleString('en-NP', { maximumFractionDigits: 0 })}`;
+  `${CURRENCY.symbol} ${Number(value || 0).toLocaleString(CURRENCY.locale, { maximumFractionDigits: 0 })}`;
 
 const formatCurrencyStrikethrough = (value) =>
-  `Rs. ${Number(value || 0).toLocaleString('en-NP', { maximumFractionDigits: 0 })}`;
+  `${CURRENCY.symbol} ${Number(value || 0).toLocaleString(CURRENCY.locale, { maximumFractionDigits: 0 })}`;
+
+// Helper for navy button active state
+const navyButtonActive = `bg-[${COLORS.primary.dark}] hover:bg-[${COLORS.primary.medium}]`;
+const navyButtonClass = `${BUTTON_STYLES.primary} font-semibold shadow-lg`;
 
 export default function ToursNew({ onNavigate }) {
   const [packages, setPackages] = useState([]);
@@ -93,7 +96,7 @@ export default function ToursNew({ onNavigate }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Hero Section - Navy Blue with Animations */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#0a1628] via-[#0f2744] to-[#1e3a5f] text-white">
+      <section className={`relative overflow-hidden ${GRADIENTS.navy.bg} text-white`}>
         {/* Animated Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 left-0 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob"></div>
@@ -124,7 +127,7 @@ export default function ToursNew({ onNavigate }) {
             <div className="mt-6 flex flex-wrap gap-4 animate-fade-in-up animation-delay-400">
               <Button 
                 size="lg" 
-                className="bg-white text-[#0a1628] hover:bg-blue-50 font-semibold shadow-xl hover:scale-105 transition-transform duration-300"
+                className={`${BUTTON_STYLES.white} shadow-xl hover:scale-105 transition-transform duration-300`}
                 onClick={() => {
                   document.getElementById('packages-section')?.scrollIntoView({ behavior: 'smooth' });
                 }}
@@ -134,7 +137,7 @@ export default function ToursNew({ onNavigate }) {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-2 border-white/60 bg-transparent text-white hover:bg-white hover:text-[#0a1628] font-semibold hover:scale-105 transition-all duration-300"
+                className={`${BUTTON_STYLES.outline} hover:scale-105 transition-all duration-300`}
                 onClick={() => onNavigate('destination-results')}
               >
                 Explore Destinations
@@ -219,7 +222,7 @@ export default function ToursNew({ onNavigate }) {
                   {/* Image */}
                   <div className="relative h-72 overflow-hidden">
                     <img
-                      src={tour.image_url || tour.image || FALLBACK_TOUR_IMAGE}
+                      src={tour.image_url || tour.image || DEFAULT_IMAGES.tour}
                       alt={tour.name}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                     />
@@ -339,7 +342,7 @@ export default function ToursNew({ onNavigate }) {
                     {/* Image */}
                     <div className="relative h-64 md:h-auto md:w-80 overflow-hidden">
                       <img
-                        src={tour.image_url || tour.image || FALLBACK_TOUR_IMAGE}
+                        src={tour.image_url || tour.image || DEFAULT_IMAGES.tour}
                         alt={tour.name}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                       />
