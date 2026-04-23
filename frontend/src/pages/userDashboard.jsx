@@ -649,29 +649,29 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
             </>
           ) : (
             <div className="space-y-6">
-              <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_25rem] xl:items-start">
                 <Card className="border border-slate-200 shadow-sm overflow-hidden">
                   <div className="bg-slate-50 px-6 py-8 md:px-8">
-                    <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="flex items-start gap-5">
-                        <Avatar className="h-24 w-24 rounded-[2rem] ring-2 ring-slate-200 ring-offset-4 ring-offset-white">
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                        <Avatar className="h-20 w-20 rounded-[1.5rem] ring-2 ring-slate-200 ring-offset-4 ring-offset-white">
                           <AvatarImage src={profileImageSrc} alt={profileDisplayName} className="object-cover" />
                           <AvatarFallback>{profileInitials}</AvatarFallback>
                         </Avatar>
-                        <div className="space-y-3">
+                        <div className="min-w-0 space-y-3">
                           <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="text-3xl font-semibold text-slate-900">{profileDisplayName}</h1>
+                            <h1 className="break-words text-2xl font-semibold text-slate-900 md:text-3xl">{profileDisplayName}</h1>
                             <Badge variant="secondary" className="capitalize">Active</Badge>
                           </div>
                           <p className="text-sm text-slate-600">{user?.role === 'guide' ? 'Tour Guide' : user?.role === 'provider' ? 'Service Provider' : 'Traveler'}</p>
                           <div className="flex flex-wrap gap-3 text-sm text-slate-500">
-                            <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{user?.email || profileForm.email}</span>
+                            <span className="max-w-full truncate rounded-full bg-white px-3 py-1.5 shadow-sm">{user?.email || profileForm.email}</span>
                             <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{user?.phone || profileForm.phone || 'No phone number yet'}</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:min-w-[26rem]">
+                      <div className="grid grid-cols-2 gap-3">
                         {[{
                           label: 'Bookings',
                           value: bookings.length,
@@ -685,9 +685,9 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                           label: 'Active',
                           value: bookings.filter(b => b.status === 'confirmed' || b.status === 'pending').length,
                         }].map((metric) => (
-                          <div key={metric.label} className="rounded-3xl bg-white p-4 shadow-sm">
-                            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{metric.label}</p>
-                            <p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p>
+                          <div key={metric.label} className="rounded-2xl bg-white p-4 shadow-sm">
+                            <p className="text-[0.68rem] uppercase tracking-[0.16em] text-slate-400">{metric.label}</p>
+                            <p className="mt-2 text-xl font-semibold text-slate-900">{metric.value}</p>
                           </div>
                         ))}
                       </div>
@@ -919,21 +919,33 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                   </CardContent>
                 </Card>
 
-                <Card className="border border-slate-200 shadow-sm overflow-hidden">
-                  <CardHeader className="space-y-2 border-b border-slate-200 bg-white px-6 py-6">
-                    <CardTitle>Manage account</CardTitle>
-                    <CardDescription>Update profile details, contact info, and your profile photo.</CardDescription>
+                <Card className="overflow-hidden border border-slate-200 shadow-sm">
+                  <CardHeader className="border-b border-slate-200 bg-white px-6 py-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <CardTitle>Manage account</CardTitle>
+                        <CardDescription>Keep your traveler details current.</CardDescription>
+                      </div>
+                      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                        Profile
+                      </Badge>
+                    </div>
                   </CardHeader>
-                  <CardContent className="space-y-6 px-6 py-6">
-                    <div className="rounded-3xl bg-slate-50 p-5">
-                      <p className="text-base font-semibold text-slate-900">{profileDisplayName}</p>
-                      <p className="mt-1 text-sm text-slate-500">{profileForm.email || 'Add your email address'}</p>
-                      <p className="mt-2 text-sm text-slate-500">
-                        {(profileForm.profile_picture || '').trim() ? 'Custom profile photo active.' : 'Default avatar generated from your account details.'}
-                      </p>
+                  <CardContent className="space-y-5 px-6 py-6">
+                    <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-500">Display name</span>
+                        <span className="truncate font-semibold text-slate-900">{profileDisplayName}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-500">Photo</span>
+                        <span className="font-semibold text-slate-900">
+                          {(profileForm.profile_picture || '').trim() ? 'Custom' : 'Generated'}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="grid gap-5">
+                    <div className="grid gap-4">
                       <div className="grid gap-2">
                         <Label htmlFor="username">Username</Label>
                         <Input
@@ -942,7 +954,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                           onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
                         />
                       </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
                         <div className="grid gap-2">
                           <Label htmlFor="first_name">First name</Label>
                           <Input
@@ -980,16 +992,16 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
 
                       <div className="grid gap-2">
                         <Label htmlFor="profile_photo">Profile photo</Label>
-                        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5">
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
                           <div className="grid gap-3">
-                            <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:flex-col xl:items-start">
                               <label
                                 htmlFor="profile_photo"
                                 className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
                               >
                                 Choose File
                               </label>
-                              <span className="text-sm text-slate-500">{photoFileName || 'No file chosen'}</span>
+                              <span className="max-w-full truncate text-sm text-slate-500">{photoFileName || 'No file chosen'}</span>
                             </div>
                             <input
                               id="profile_photo"
@@ -998,7 +1010,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                               onChange={handleProfilePhotoUpload}
                               className="sr-only"
                             />
-                            <p className="text-sm leading-6 text-slate-500">Upload a square photo or paste an image URL below. The main profile avatar updates automatically.</p>
+                            <p className="text-sm leading-6 text-slate-500">Upload a square photo or use an image URL. The main avatar updates automatically.</p>
                             {!getCloudinaryUploadEnabled() && (
                               <p className="text-sm leading-6 text-amber-600">Cloudinary env vars are missing, so file upload is disabled. Use the image URL field below.</p>
                             )}
@@ -1019,7 +1031,7 @@ const UserDashboard = ({ onNavigate, onSelectDestination, view = 'dashboard' }) 
                       </div>
                     </div>
                   </CardContent>
-                  <div className="p-4 grid gap-3">
+                  <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4">
                     <Button onClick={handleSaveProfile} className="w-full" disabled={profilePhotoFile && !getCloudinaryUploadEnabled()}>
                       Save changes
                     </Button>
