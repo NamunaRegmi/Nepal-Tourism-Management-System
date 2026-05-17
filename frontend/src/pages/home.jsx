@@ -120,7 +120,7 @@ const Home = ({ onNavigate, onSelectDestination }) => {
   return (
     <div className="flex flex-col w-full bg-slate-50">
       <main className="relative">
-        <div className="h-[70vh] relative overflow-hidden">
+        <div className="h-[calc(100vh-4rem)] relative overflow-hidden">
           {/* Nepal-themed background with overlay and Ken Burns animation */}
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat animate-ken-burns"
@@ -146,15 +146,13 @@ const Home = ({ onNavigate, onSelectDestination }) => {
           {/* Decorative mountain silhouettes */}
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-900/50 to-transparent" />
           
-          <div className="relative z-10 h-full flex flex-col items-center justify-start text-white px-6 pt-20 pb-12">
+          <div className="relative z-10 h-full flex flex-col items-center justify-center text-white px-6 pb-48">
             <div className="text-center max-w-3xl">
-              <h1 className="text-8xl font-bold tracking-wide drop-shadow-lg">
-                <span className="bg-gradient-to-r from-blue-200 via-white to-blue-200 bg-clip-text text-transparent">
-                  Nepal
-                </span>
+              <h1 className="text-8xl font-bold tracking-wide" style={{ textShadow: '0 4px 24px rgba(0,0,0,0.5)' }}>
+                Nepal
               </h1>
-              <div className="w-32 h-1 bg-gradient-to-r from-blue-400 to-white mx-auto rounded-full"></div>
-              <p className="text-2xl text-center max-w-3xl font-light drop-shadow-md mt-6">
+              <div className="w-32 h-1 bg-gradient-to-r from-blue-400 to-white mx-auto rounded-full mt-2"></div>
+              <p className="text-2xl text-center max-w-3xl font-light mt-6 text-white/90" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
                 Discover Your Next Adventure in the Land of Himalayas
               </p>
             </div>
@@ -177,35 +175,35 @@ const Home = ({ onNavigate, onSelectDestination }) => {
             </div>
 
             {/* Enhanced Search Bar Section */}
-            <div className="absolute bottom-8 left-0 right-0 px-6">
+            <div className="absolute bottom-32 left-0 right-0 px-6">
               <div className="max-w-6xl mx-auto">
                 <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 shadow-2xl border border-white/20">
-                  <div className="grid gap-4 sm:grid-cols-4 items-center">
-                    <div className="relative w-full">
-                      <MapPin className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-300 w-5 h-5" />
+                  <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+                    <div className="relative flex-1">
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300 w-5 h-5 pointer-events-none" />
                       <input
                         type="text"
                         placeholder="Where you want to go?"
                         value={searchLocation}
                         onChange={(e) => setSearchLocation(e.target.value)}
-                        className="w-full p-4 pl-12 rounded-xl bg-white/20 backdrop-blur-sm text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white/30 transition-all duration-300"
+                        className="w-full h-14 pl-12 pr-4 rounded-xl bg-white/20 backdrop-blur-sm text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white/30 transition-all duration-300"
                       />
                     </div>
-                    <div className="relative w-full">
-                      <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-300 w-5 h-5" />
+                    <div className="relative flex-1">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300 w-5 h-5 pointer-events-none" />
                       <input
                         type="date"
                         value={searchDate}
                         onChange={(e) => setSearchDate(e.target.value)}
-                        className="w-full p-4 pl-12 rounded-xl bg-white/20 backdrop-blur-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white/30 transition-all duration-300"
+                        className="w-full h-14 pl-12 pr-4 rounded-xl bg-white/20 backdrop-blur-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white/30 transition-all duration-300"
                       />
                     </div>
-                    <div className="relative w-full">
-                      <Mountain className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-300 w-5 h-5" />
-                      <select 
+                    <div className="relative flex-1">
+                      <Mountain className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300 w-5 h-5 pointer-events-none" />
+                      <select
                         value={searchType}
                         onChange={(e) => setSearchType(e.target.value)}
-                        className="w-full p-4 pl-12 rounded-xl bg-white/20 backdrop-blur-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white/30 transition-all duration-300 appearance-none cursor-pointer"
+                        className="w-full h-14 pl-12 pr-4 rounded-xl bg-white/20 backdrop-blur-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white/30 transition-all duration-300 appearance-none cursor-pointer"
                       >
                         <option className="bg-slate-800">Travel type</option>
                         <option className="bg-slate-800">Adventure</option>
@@ -214,9 +212,9 @@ const Home = ({ onNavigate, onSelectDestination }) => {
                         <option className="bg-slate-800">Wildlife</option>
                       </select>
                     </div>
-                    <button 
-                      onClick={() => handleSearchSubmit()} 
-                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-2xl border-2 border-white/30"
+                    <button
+                      onClick={() => handleSearchSubmit()}
+                      className="h-14 px-8 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold rounded-xl transition-all duration-300 hover:scale-105 shadow-2xl border-2 border-white/30 whitespace-nowrap"
                     >
                       Search Adventures
                     </button>
