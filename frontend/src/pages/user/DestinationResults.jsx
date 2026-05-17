@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, List, Grid, ChevronRight, Info, CloudSun, Mountain, Trees, Waves } from 'lucide-react';
+import { MapPin, List, Grid, ChevronRight, Info, CloudSun, Mountain, Trees, Waves, Sparkles, SlidersHorizontal, Calendar, Hotel, Package, Star, Users, TrendingUp, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { destinationService } from '@/services/api';
 import { useAppDataSync } from '@/lib/dataSync';
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import {
     formatDistrictLabel,
     getDistrictForDestination,
+    getProvinceForDistrict,
     getTerrainForDestination,
     getTerrainForDistrict,
     normalizeDistrictName,
@@ -29,23 +30,101 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Curated image map — ensures correct images regardless of DB values
+// Place-specific image map — longest key matched first
 const DESTINATION_IMAGES = {
-    kathmandu: 'https://media.greenvalleynepaltreks.com/uploads/fullbanner/pashupatinath-temple-kathmandu.webp',
-    pokhara: 'https://lp-cms-production.imgix.net/2019-06/53693064.jpg',
-    chitwan: 'https://wallpaperbat.com/img/33765-shafir-image-night-kathmandu.jpg',
-    lumbini: 'https://cdn.kimkim.com/files/a/article_images/images/e8ec67f6bc9ab8f8e4f1ac868992e5eb773d216b/big-8fb97ea8663986559702dcfcd4dd51f8.jpg',
-    manang: 'https://www.hikingannapurna.com/blog/wp-content/uploads/2023/07/adventure-beautiful-clouds-4045693.jpg',
-    mustang: 'https://www.thirdrockadventures.com/assets-back/images/news/upper-mustang.jpgCM3.jpg',
-    everest: 'https://images.pexels.com/photos/417173/pexels-photo-417173.jpeg?auto=compress&cs=tinysrgb&w=800',
+    // ── multi-word keys (matched before shorter overlapping keys) ─────────────
+    'kathmandu durbar square': 'https://images.unsplash.com/photo-1582531579541-45e90e9b8c67?auto=format&fit=crop&w=800&q=80',
+    'pashupatinath temple':    'https://images.unsplash.com/photo-1567521464027-f127ff144326?auto=format&fit=crop&w=800&q=80',
+    'swayambhunath (monkey temple)': 'https://images.unsplash.com/photo-1588345921523-c2dcdb7f1dcd?auto=format&fit=crop&w=800&q=80',
+    'poon hill (ghorepani)':   'https://images.unsplash.com/photo-1597945161640-9366e6d4253b?auto=format&fit=crop&w=800&q=80',
+    'upper mustang':           'https://images.unsplash.com/photo-1623645534667-d6dab01b3a0c?auto=format&fit=crop&w=800&q=80',
+    'everest base camp':       'https://images.pexels.com/photos/417173/pexels-photo-417173.jpeg?auto=compress&cs=tinysrgb&w=800',
+    'annapurna base camp':     'https://images.unsplash.com/photo-1519923834699-ef0b7cde4712?auto=format&fit=crop&w=800&q=80',
+    'namche bazaar':           'https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?auto=format&fit=crop&w=800&q=80',
+    'gokyo lakes':             'https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=800&q=80',
+    'tengboche monastery':     'https://images.unsplash.com/photo-1605640840605-14ac1855827b?auto=format&fit=crop&w=800&q=80',
+    'kanchenjunga base camp':  'https://images.unsplash.com/photo-1540390769625-2fc3f8b1d50c?auto=format&fit=crop&w=800&q=80',
+    'koshi tappu wildlife reserve': 'https://images.unsplash.com/photo-1474511320723-9a56873867b5?auto=format&fit=crop&w=800&q=80',
+    'bardia national park':    'https://images.pexels.com/photos/247502/pexels-photo-247502.jpeg?auto=compress&cs=tinysrgb&w=800',
+    'shuklaphanta national park': 'https://images.unsplash.com/photo-1516939884455-1445c8652f83?auto=format&fit=crop&w=800&q=80',
+    'khaptad national park':   'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=800&q=80',
+    'shey phoksundo lake':     'https://images.unsplash.com/photo-1511884642898-4c92249e20b6?auto=format&fit=crop&w=800&q=80',
+    'manaslu circuit':         'https://images.pexels.com/photos/1659438/pexels-photo-1659438.jpeg?auto=compress&cs=tinysrgb&w=800',
+    'pokhara paragliding':     'https://images.pexels.com/photos/1365425/pexels-photo-1365425.jpeg?auto=compress&cs=tinysrgb&w=800',
+    'trisuli river rafting':   'https://images.unsplash.com/photo-1530866495561-507c9faab2ed?auto=format&fit=crop&w=800&q=80',
+    'langtang valley':         'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=80',
+    'makalu base camp':        'https://images.unsplash.com/photo-1529260830199-42c24126f198?auto=format&fit=crop&w=800&q=80',
+    'tilicho lake':            'https://images.unsplash.com/photo-1473773508845-188df298d2d1?auto=format&fit=crop&w=800&q=80',
+    'patan (lalitpur)':        'https://images.unsplash.com/photo-1599030243932-0f6cdb4ad3c4?auto=format&fit=crop&w=800&q=80',
+    'tansen (palpa)':          'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=800&q=80',
+    'api himal':               'https://images.unsplash.com/photo-1535041422672-8c3254ab4b7a?auto=format&fit=crop&w=800&q=80',
+
+    // ── single-word / short keys ──────────────────────────────────────────────
+    // Kathmandu Valley heritage
+    kathmandu:     'https://images.unsplash.com/photo-1582531579541-45e90e9b8c67?auto=format&fit=crop&w=800&q=80',
+    bhaktapur:     'https://images.pexels.com/photos/2161467/pexels-photo-2161467.jpeg?auto=compress&cs=tinysrgb&w=800',
+    patan:         'https://images.unsplash.com/photo-1599030243932-0f6cdb4ad3c4?auto=format&fit=crop&w=800&q=80',
+    lalitpur:      'https://images.unsplash.com/photo-1599030243932-0f6cdb4ad3c4?auto=format&fit=crop&w=800&q=80',
+    boudhanath:    'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=800&q=80',
+    pashupatinath: 'https://images.unsplash.com/photo-1567521464027-f127ff144326?auto=format&fit=crop&w=800&q=80',
+    swayambhunath: 'https://images.unsplash.com/photo-1588345921523-c2dcdb7f1dcd?auto=format&fit=crop&w=800&q=80',
+    namobuddha:    'https://images.unsplash.com/photo-1545243424-0ce743d7e0e3?auto=format&fit=crop&w=800&q=80',
+    nagarkot:      'https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=800',
+    dhulikhel:     'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=80',
+    langtang:      'https://images.unsplash.com/photo-1551107696-a4b537a53e43?auto=format&fit=crop&w=800&q=80',
+    gosaikunda:    'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
+    helambu:       'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=800&q=80',
+    trisuli:       'https://images.unsplash.com/photo-1530866495561-507c9faab2ed?auto=format&fit=crop&w=800&q=80',
+    // Gandaki
+    pokhara:       'https://lp-cms-production.imgix.net/2019-06/53693064.jpg',
+    annapurna:     'https://images.unsplash.com/photo-1519923834699-ef0b7cde4712?auto=format&fit=crop&w=800&q=80',
+    ghorepani:     'https://images.unsplash.com/photo-1597945161640-9366e6d4253b?auto=format&fit=crop&w=800&q=80',
+    jomsom:        'https://images.unsplash.com/photo-1586348943529-beaae6c28db9?auto=format&fit=crop&w=800&q=80',
+    muktinath:     'https://images.pexels.com/photos/7672255/pexels-photo-7672255.jpeg?auto=compress&cs=tinysrgb&w=800',
+    tilicho:       'https://images.unsplash.com/photo-1473773508845-188df298d2d1?auto=format&fit=crop&w=800&q=80',
+    bandipur:      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=800&q=80',
+    gorkha:        'https://images.pexels.com/photos/3278215/pexels-photo-3278215.jpeg?auto=compress&cs=tinysrgb&w=800',
+    manaslu:       'https://images.pexels.com/photos/1659438/pexels-photo-1659438.jpeg?auto=compress&cs=tinysrgb&w=800',
+    manang:        'https://www.hikingannapurna.com/blog/wp-content/uploads/2023/07/adventure-beautiful-clouds-4045693.jpg',
+    mustang:       'https://images.unsplash.com/photo-1623645534667-d6dab01b3a0c?auto=format&fit=crop&w=800&q=80',
+    paragliding:   'https://images.pexels.com/photos/1365425/pexels-photo-1365425.jpeg?auto=compress&cs=tinysrgb&w=800',
+    // Koshi
+    everest:       'https://images.pexels.com/photos/417173/pexels-photo-417173.jpeg?auto=compress&cs=tinysrgb&w=800',
+    namche:        'https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?auto=format&fit=crop&w=800&q=80',
+    gokyo:         'https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=800&q=80',
+    tengboche:     'https://images.unsplash.com/photo-1605640840605-14ac1855827b?auto=format&fit=crop&w=800&q=80',
+    kanchenjunga:  'https://images.unsplash.com/photo-1540390769625-2fc3f8b1d50c?auto=format&fit=crop&w=800&q=80',
+    ilam:          'https://images.pexels.com/photos/1638280/pexels-photo-1638280.jpeg?auto=compress&cs=tinysrgb&w=800',
+    makalu:        'https://images.unsplash.com/photo-1529260830199-42c24126f198?auto=format&fit=crop&w=800&q=80',
+    // Madhesh
+    janakpur:      'https://images.pexels.com/photos/5358830/pexels-photo-5358830.jpeg?auto=compress&cs=tinysrgb&w=800',
+    // Lumbini
+    lumbini:       'https://cdn.kimkim.com/files/a/article_images/images/e8ec67f6bc9ab8f8e4f1ac868992e5eb773d216b/big-8fb97ea8663986559702dcfcd4dd51f8.jpg',
+    chitwan:       'https://images.pexels.com/photos/792381/pexels-photo-792381.jpeg?auto=compress&cs=tinysrgb&w=800',
+    bardia:        'https://images.pexels.com/photos/247502/pexels-photo-247502.jpeg?auto=compress&cs=tinysrgb&w=800',
+    tansen:        'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=800&q=80',
+    tilaurakot:    'https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=800&q=80',
+    // Karnali
+    rara:          'https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=800&q=80',
+    phoksundo:     'https://images.unsplash.com/photo-1511884642898-4c92249e20b6?auto=format&fit=crop&w=800&q=80',
+    dolpo:         'https://images.unsplash.com/photo-1526913049886-9f54f5cf3dd9?auto=format&fit=crop&w=800&q=80',
+    jumla:         'https://images.unsplash.com/photo-1487956382158-bb926046304a?auto=format&fit=crop&w=800&q=80',
+    // Sudurpashchim
+    shuklaphanta:  'https://images.unsplash.com/photo-1516939884455-1445c8652f83?auto=format&fit=crop&w=800&q=80',
+    khaptad:       'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=800&q=80',
+    api:           'https://images.unsplash.com/photo-1535041422672-8c3254ab4b7a?auto=format&fit=crop&w=800&q=80',
 };
 
 const getDestinationImage = (dest) => {
+    if (!dest) return 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80';
+    // try multi-word keys first (longest match wins)
     const lower = (dest.name || '').toLowerCase();
-    for (const [key, url] of Object.entries(DESTINATION_IMAGES)) {
-        if (lower.includes(key)) return url;
+    const sorted = Object.keys(DESTINATION_IMAGES).sort((a, b) => b.length - a.length);
+    for (const key of sorted) {
+        if (lower.includes(key)) return DESTINATION_IMAGES[key];
     }
-    return dest.image || 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80';
+    // fall back to whatever is stored in DB
+    return dest.image_url || dest.image || 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80';
 };
 
 const NepalMapViewport = ({ districtMapData }) => {
@@ -70,15 +149,42 @@ const NepalMapViewport = ({ districtMapData }) => {
     return null;
 };
 
+const INTEREST_OPTIONS = [
+    { label: 'Trekking',   value: 'trekking' },
+    { label: 'Cultural',   value: 'cultural' },
+    { label: 'Wildlife',   value: 'wildlife' },
+    { label: 'Relaxation', value: 'relaxation' },
+    { label: 'Religious',  value: 'religious' },
+    { label: 'Adventure',  value: 'adventure' },
+];
+const SEASON_OPTIONS = [
+    { label: 'Spring', value: 'spring', hint: 'Mar–May' },
+    { label: 'Summer', value: 'summer', hint: 'Jun–Aug' },
+    { label: 'Autumn', value: 'autumn', hint: 'Sep–Nov' },
+    { label: 'Winter', value: 'winter', hint: 'Dec–Feb' },
+];
+const PREFS_KEY = 'travel_preferences';
+
+function loadPrefs() {
+    try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || { interests: [], season: '' }; }
+    catch { return { interests: [], season: '' }; }
+}
+
 const DestinationResults = ({ onNavigate, onSelectDestination }) => {
     const [destinations, setDestinations] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
+    const [viewMode, setViewMode] = useState('list');
     const [error, setError] = useState(null);
     const [selectedTerrain, setSelectedTerrain] = useState('All');
     const [selectedDistrict, setSelectedDistrict] = useState(null);
     const [districtMapData, setDistrictMapData] = useState(null);
     const [districtMapError, setDistrictMapError] = useState(false);
+
+    const [prefs, setPrefs] = useState(loadPrefs);
+    const [showPrefs, setShowPrefs] = useState(false);
+    const [aiRecs, setAiRecs] = useState([]);
+    const [aiLoading, setAiLoading] = useState(true);
+    const sliderRef = useRef(null);
 
     const fetchDestinations = useCallback(async () => {
         try {
@@ -99,9 +205,41 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
         }
     }, []);
 
+    const fetchAiRecs = useCallback(async () => {
+        setAiLoading(true);
+        try {
+            const params = {};
+            if (prefs.interests.length) params.interests = prefs.interests.join(',');
+            if (prefs.season) params.season = prefs.season;
+            const res = await destinationService.getExploreRecommendations(params);
+            setAiRecs(res.data || []);
+        } catch {
+            setAiRecs([]);
+        } finally {
+            setAiLoading(false);
+        }
+    }, [prefs]);
+
+    const updatePrefs = (next) => {
+        const merged = { ...prefs, ...next };
+        setPrefs(merged);
+        localStorage.setItem(PREFS_KEY, JSON.stringify(merged));
+    };
+
+    const toggleInterest = (value) => {
+        const interests = prefs.interests.includes(value)
+            ? prefs.interests.filter(i => i !== value)
+            : [...prefs.interests, value];
+        updatePrefs({ interests });
+    };
+
     useEffect(() => {
         fetchDestinations();
     }, [fetchDestinations]);
+
+    useEffect(() => {
+        fetchAiRecs();
+    }, [fetchAiRecs]);
 
     useEffect(() => {
         let ignore = false;
@@ -144,20 +282,29 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
         { key: 'Terai', label: 'Terai', icon: Waves },
     ];
 
-    const filteredDestinations = destinations.filter((dest) => {
-        if (selectedTerrain === 'All') return true;
-        return getTerrainForDestination(dest) === selectedTerrain;
-    });
-
     const selectedDistrictKey = normalizeDistrictName(selectedDistrict);
+    const selectedProvince = selectedDistrictKey ? getProvinceForDistrict(selectedDistrictKey) : null;
+
+    const filteredDestinations = destinations.filter((dest) => {
+        // District filter: exact district match OR province-level match
+        if (selectedDistrictKey) {
+            const destDistrict = getDistrictForDestination(dest);
+            if (destDistrict === selectedDistrictKey) return true;
+            if (selectedProvince && dest.province === selectedProvince) return true;
+            return false;
+        }
+        // Terrain filter (no district selected)
+        if (selectedTerrain !== 'All') {
+            return getTerrainForDestination(dest) === selectedTerrain;
+        }
+        return true;
+    });
 
     const sortedDestinations = selectedDistrictKey
         ? filteredDestinations.slice().sort((a, b) => {
-            const aDistrict = getDistrictForDestination(a);
-            const bDistrict = getDistrictForDestination(b);
-            const aScore = aDistrict === selectedDistrictKey ? 1 : 0;
-            const bScore = bDistrict === selectedDistrictKey ? 1 : 0;
-            return bScore - aScore;
+            const aExact = getDistrictForDestination(a) === selectedDistrictKey ? 1 : 0;
+            const bExact = getDistrictForDestination(b) === selectedDistrictKey ? 1 : 0;
+            return bExact - aExact;
         })
         : filteredDestinations;
 
@@ -318,12 +465,16 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
                                     : undefined}
                             >
                                 <p className="text-sm font-semibold text-white">
-                                    {selectedDistrict ? `${formatDistrictLabel(selectedDistrict)} selected` : 'No district selected'}
+                                    {selectedDistrict
+                                        ? `${formatDistrictLabel(selectedDistrict)} District${selectedProvince ? ` - ${selectedProvince} Province` : ""}`
+                                        : "No district selected"}
                                 </p>
                                 <p className="mt-2 text-sm text-blue-100/90">
-                                    {activeTerrainInfo
-                                        ? `${activeTerrainInfo.label}: ${activeTerrainInfo.description}`
-                                        : 'Choose a district or terrain type to filter the destination list and inspect how Nepal’s geography shapes each journey.'}
+                                    {selectedDistrictKey
+                                        ? `Showing ${sortedDestinations.length} destination${sortedDestinations.length !== 1 ? "s" : ""} in ${selectedProvince || formatDistrictLabel(selectedDistrict)}. Exact district matches appear first.`
+                                        : activeTerrainInfo
+                                            ? `${activeTerrainInfo.label}: ${activeTerrainInfo.description}`
+                                            : "Click any district on the map to filter destinations for that area."}
                                 </p>
                             </div>
                         </div>
@@ -377,51 +528,10 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
                     </div>
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-6">
-
-                    {/* Sidebar */}
-                    <aside className="w-full lg:w-72 flex-shrink-0">
-                        <div className="sticky top-20 space-y-4">
-                            {/* Map Preview */}
-                            <div className="relative rounded-lg overflow-hidden border border-gray-200 h-64 group cursor-pointer shadow-inner">
-                                <MapContainer
-                                    center={[28.3949, 84.1240]}
-                                    zoom={6}
-                                    scrollWheelZoom={false}
-                                    style={{ height: '100%', width: '100%' }}
-                                    zoomControl={false}
-                                    dragging={true}
-                                    doubleClickZoom={false}
-                                >
-                                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                    {sortedDestinations.map(dest => (
-                                        dest.latitude && dest.longitude && (
-                                            <Marker key={dest.id} position={[dest.latitude, dest.longitude]}>
-                                                <Popup>{dest.name}</Popup>
-                                            </Marker>
-                                        )
-                                    ))}
-                                </MapContainer>
-                                <div className="absolute top-2 left-2 z-[400] bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-[10px] font-bold text-blue-600 shadow-sm border border-blue-100">
-                                    {sortedDestinations.length} LOCATIONS
-                                </div>
-                            </div>
-                            <div className="rounded-lg border border-gray-200 bg-slate-50 p-4">
-                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Active filter</p>
-                                <p className="mt-2 text-base font-semibold text-slate-900">
-                                    {selectedTerrain === 'All' ? 'All terrain' : selectedTerrain}
-                                </p>
-                                <p className="mt-1 text-sm text-slate-600">
-                                    {selectedDistrict
-                                        ? `Triggered by ${formatDistrictLabel(selectedDistrict)}.`
-                                        : 'Use the terrain explorer above to focus on a physiographic region.'}
-                                </p>
-                            </div>
-                        </div>
-                    </aside>
+                <div>
 
                     {/* Main Content */}
-                    <main className="flex-1">
+                    <main>
                         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900">Explore Destinations in Nepal</h1>
@@ -449,6 +559,255 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
                                 </Button>
                             </div>
                         </header>
+
+                        {/* AI Recommendations */}
+                        <div className="mb-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 bg-violet-100 rounded-xl flex items-center justify-center">
+                                        <Sparkles className="h-4 w-4 text-violet-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="font-bold text-slate-900 text-sm">AI-Recommended for You</h2>
+                                        <p className="text-[11px] text-slate-400">
+                                            {prefs.interests.length || prefs.season
+                                                ? `Based on: ${[...prefs.interests, prefs.season].filter(Boolean).join(', ')}`
+                                                : 'Personalise to get tailored picks'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowPrefs(s => !s)}
+                                    className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-violet-600 bg-slate-50 hover:bg-violet-50 border border-slate-200 hover:border-violet-200 px-3 py-1.5 rounded-full transition-all"
+                                >
+                                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                                    {showPrefs ? 'Hide' : 'Personalise'}
+                                </button>
+                            </div>
+                            <div className="mt-4">
+
+                            {showPrefs && (
+                                <div className="mb-4 p-4 bg-white rounded-xl border border-violet-100 space-y-3">
+                                    <div>
+                                        <p className="text-[11px] font-semibold text-violet-700 uppercase tracking-wider mb-2">Interests</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {INTEREST_OPTIONS.map(({ label, value }) => {
+                                                const active = prefs.interests.includes(value);
+                                                return (
+                                                    <button
+                                                        key={value}
+                                                        onClick={() => toggleInterest(value)}
+                                                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active
+                                                            ? 'bg-violet-600 text-white border-violet-600'
+                                                            : 'bg-white text-gray-600 border-gray-200 hover:border-violet-300'
+                                                        }`}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-semibold text-violet-700 uppercase tracking-wider mb-2">Travel Season</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {SEASON_OPTIONS.map(({ label, value, hint }) => {
+                                                const active = prefs.season === value;
+                                                return (
+                                                    <button
+                                                        key={value}
+                                                        onClick={() => updatePrefs({ season: active ? '' : value })}
+                                                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active
+                                                            ? 'bg-violet-600 text-white border-violet-600'
+                                                            : 'bg-white text-gray-600 border-gray-200 hover:border-violet-300'
+                                                        }`}
+                                                    >
+                                                        {label} <span className="opacity-60">{hint}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {aiLoading ? (
+                                <div className="flex gap-4 overflow-hidden">
+                                    {[...Array(4)].map((_, i) => (
+                                        <div key={i} className="flex-shrink-0 w-72 h-96 rounded-2xl bg-slate-100 animate-pulse" />
+                                    ))}
+                                </div>
+                            ) : aiRecs.length === 0 ? (
+                                <p className="text-sm text-slate-400 text-center py-6">No recommendations available.</p>
+                            ) : (
+                                <div className="relative group/slider">
+                                    {/* Prev button */}
+                                    <button
+                                        onClick={() => sliderRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+                                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-9 h-9 bg-white border border-slate-200 rounded-full shadow-md flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-slate-50 hover:border-violet-300"
+                                    >
+                                        <ChevronLeft className="h-4 w-4 text-slate-600" />
+                                    </button>
+                                    {/* Next button */}
+                                    <button
+                                        onClick={() => sliderRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-9 h-9 bg-white border border-slate-200 rounded-full shadow-md flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-slate-50 hover:border-violet-300"
+                                    >
+                                        <ChevronRight className="h-4 w-4 text-slate-600" />
+                                    </button>
+                                    {/* Scrollable track */}
+                                    <div
+                                        ref={sliderRef}
+                                        className="flex gap-4 overflow-x-auto pb-2 scroll-smooth no-scrollbar"
+                                        style={{ scrollSnapType: 'x mandatory' }}
+                                    >
+                                    {aiRecs.map(rec => {
+                                        const s = rec.stats || {};
+                                        return (
+                                        <div
+                                            key={rec.id}
+                                            className="group rounded-2xl overflow-hidden border border-slate-200 hover:border-violet-300 hover:shadow-xl transition-all duration-300 bg-white flex flex-col shadow-sm flex-shrink-0 w-72"
+                                            style={{ scrollSnapAlign: 'start' }}
+                                        >
+                                            {/* Hero image */}
+                                            <button onClick={() => onSelectDestination(rec.id)} className="relative h-44 overflow-hidden flex-shrink-0 block w-full">
+                                                <img
+                                                    src={getDestinationImage(rec)}
+                                                    alt={rec.name}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                                                {/* Top badges */}
+                                                <div className="absolute top-2.5 left-2.5 right-2.5 flex items-start justify-between">
+                                                    {s.avg_rating > 0 ? (
+                                                        <span className="flex items-center gap-0.5 bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full border border-white/20">
+                                                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />{s.avg_rating}
+                                                        </span>
+                                                    ) : <span />}
+                                                    {s.min_price > 0 && (
+                                                        <span className="bg-black/40 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full border border-white/20">
+                                                            from Rs.{s.min_price.toLocaleString()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Bottom name */}
+                                                <div className="absolute bottom-2.5 left-3 right-3">
+                                                    <p className="text-white font-bold text-base leading-tight drop-shadow-md">{rec.name}</p>
+                                                    <div className="flex items-center gap-1 text-white/75 text-[11px] mt-0.5">
+                                                        <MapPin className="h-2.5 w-2.5" />{rec.province}
+                                                    </div>
+                                                </div>
+                                            </button>
+
+                                            <div className="p-4 flex flex-col flex-1 gap-3">
+
+                                                {/* AI reason */}
+                                                {rec.ai_reason && (
+                                                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 border-l-2 border-violet-300 pl-2.5 italic">
+                                                        {rec.ai_reason}
+                                                    </p>
+                                                )}
+
+                                                {/* Inline stats strip */}
+                                                <div className="flex items-center gap-0 bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
+                                                    <div className="flex-1 flex flex-col items-center py-2 px-1 border-r border-slate-200">
+                                                        <p className="text-sm font-bold text-slate-800">{s.hotel_count ?? 0}</p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5">Hotels</p>
+                                                    </div>
+                                                    <div className="flex-1 flex flex-col items-center py-2 px-1 border-r border-slate-200">
+                                                        <p className="text-sm font-bold text-slate-800">{s.package_count ?? 0}</p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5">Packages</p>
+                                                    </div>
+                                                    <div className="flex-1 flex flex-col items-center py-2 px-1 border-r border-slate-200">
+                                                        <p className="text-sm font-bold text-slate-800">{s.booking_count ?? 0}</p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5">Bookings</p>
+                                                    </div>
+                                                    <div className="flex-1 flex flex-col items-center py-2 px-1">
+                                                        <p className="text-sm font-bold text-slate-800">{s.highlights_count ?? 0}</p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5">Spots</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Top hotel */}
+                                                {rec.top_hotel && (
+                                                    <div className="rounded-xl border border-slate-100 overflow-hidden">
+                                                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Hotel className="h-3 w-3 text-slate-400" />
+                                                                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Best Hotel</span>
+                                                            </div>
+                                                            <span className="flex items-center gap-0.5 text-[11px] font-bold text-amber-500">
+                                                                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                                                {rec.top_hotel.rating}
+                                                            </span>
+                                                        </div>
+                                                        <div className="px-3 py-2.5 bg-white">
+                                                            <p className="text-xs font-bold text-slate-800 truncate">{rec.top_hotel.name}</p>
+                                                            <div className="flex items-center justify-between mt-1">
+                                                                <p className="text-[11px] text-slate-500">
+                                                                    from <span className="font-semibold text-slate-700">Rs.{rec.top_hotel.price_per_night.toLocaleString()}</span>/night
+                                                                </p>
+                                                                {rec.top_hotel.amenities?.length > 0 && (
+                                                                    <div className="flex gap-1">
+                                                                        {rec.top_hotel.amenities.slice(0,2).map((a, i) => (
+                                                                            <span key={i} className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{a}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Featured package */}
+                                                {rec.packages?.[0] && (
+                                                    <div className="rounded-xl border border-violet-100 overflow-hidden">
+                                                        <div className="flex items-center justify-between px-3 py-2 bg-violet-50 border-b border-violet-100">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Package className="h-3 w-3 text-violet-400" />
+                                                                <span className="text-[10px] font-semibold text-violet-500 uppercase tracking-wider">Package</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-semibold text-violet-500 bg-violet-100 px-2 py-0.5 rounded-full">
+                                                                {rec.packages[0].duration_days} days
+                                                            </span>
+                                                        </div>
+                                                        <div className="px-3 py-2.5 bg-white">
+                                                            <p className="text-xs font-bold text-slate-800 truncate">{rec.packages[0].name}</p>
+                                                            <div className="flex items-center justify-between mt-1">
+                                                                <p className="text-[11px] font-bold text-violet-600">Rs.{rec.packages[0].price.toLocaleString()}</p>
+                                                                <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                                                                    <Users className="h-3 w-3" />
+                                                                    max {rec.packages[0].max_people}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Best time + explore */}
+                                                <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+                                                    {rec.best_time_to_visit ? (
+                                                        <span className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-50 border border-slate-200 px-2 py-1 rounded-full truncate">
+                                                            <Calendar className="h-3 w-3 flex-shrink-0" />
+                                                            {rec.best_time_to_visit}
+                                                        </span>
+                                                    ) : <span />}
+                                                    <button
+                                                        onClick={() => onSelectDestination(rec.id)}
+                                                        className="flex-shrink-0 text-[11px] font-bold text-white px-3.5 py-1.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow-md"
+                                                    >
+                                                        Explore →
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        );
+                                    })}
+                                    </div>
+                                </div>
+                            )}
+                            </div>
+                        </div>
 
                         {/* List of Destinations */}
                         <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6' : 'space-y-4'}>
