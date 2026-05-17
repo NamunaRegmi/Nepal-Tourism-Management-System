@@ -25,27 +25,35 @@ api.interceptors.request.use(
     }
 );
 
-// Add a response interceptor to handle token expiration (optional but good practice)
+// Auth endpoints that legitimately require a token — don't retry these without auth
+const AUTH_REQUIRED_PATHS = ['/auth/profile/', '/bookings/', '/guide-bookings/', '/admin/'];
+
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
 
-        // If error is 401 and we haven't tried to refresh yet
         if (error?.response?.status === 401 && originalRequest && !originalRequest._retry) {
             originalRequest._retry = true;
 
-            try {
-                const refreshToken = localStorage.getItem('refresh_token');
-                if (refreshToken) {
-                    // We would need a refresh token endpoint, but for now let's just logout or handle it simply
-                    // implementing true refresh logic requires a bit more work in backendurls/views
-                    // For this MVP, we might just redirect to login
-                    console.log("Token expired");
-                }
-            } catch (e) {
-                console.error("Refresh token failed", e);
+            const url = originalRequest.url || '';
+            const needsAuth = AUTH_REQUIRED_PATHS.some((p) => url.includes(p));
+
+            if (!needsAuth) {
+                // Public endpoint rejected our expired token — strip auth and retry once
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('user');
+                notifyAppDataChanged();
+                delete originalRequest.headers['Authorization'];
+                return api(originalRequest);
             }
+
+            // Auth-required endpoint with expired token — clear session
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+            notifyAppDataChanged();
         }
 
         if (error?.code === 'ECONNABORTED') {
@@ -73,6 +81,8 @@ export const authService = {
 export const destinationService = {
     getAll: () => api.get('destinations/'),
     getById: (id) => api.get(`destinations/${id}/`),
+    getRecommendations: (id, params) => api.get(`destinations/${id}/recommendations/`, { params }),
+    getExploreRecommendations: (params) => api.get('destinations/explore-recommendations/', { params }),
     create: (data) => api.post('destinations/', data),
     update: (id, data) => api.put(`destinations/${id}/`, data),
     delete: (id) => api.delete(`destinations/${id}/`),
@@ -97,6 +107,7 @@ export const roomService = {
 
 export const packageService = {
     getAll: () => api.get('packages/'),
+    getByDestination: (destId) => api.get('packages/', { params: { destination_id: destId } }),
     getMyPackages: () => api.get('provider/packages/'),
     getById: (id) => api.get(`packages/${id}/`),
     create: (data) => api.post('provider/packages/', data),
@@ -140,6 +151,10 @@ export const adminService = {
     getAllPackages: () => api.get('admin/packages/'),
     // Same data as BookingListView for admin role (backend returns all bookings)
     getAllBookings: () => api.get('bookings/'),
+};
+
+export const chatService = {
+    sendMessage: (message, history) => api.post('chat/', { message, history }),
 };
 
 export default api;
