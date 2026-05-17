@@ -1,4 +1,8 @@
 asgiref==3.8.1
+cloudinary
+django-cloudinary-storage
+psycopg2-binary
+groq
 cachetools==6.2.4
 certifi==2026.1.4
 charset-normalizer==3.4.4
