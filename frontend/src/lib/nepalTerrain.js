@@ -100,13 +100,41 @@ export const DISTRICT_TERRAIN = {
 };
 
 const DISTRICT_MATCHERS = [
-  { district: 'KATHMANDU', tokens: ['kathmandu'] },
-  { district: 'KASKI', tokens: ['pokhara', 'kaski'] },
+  // Koshi Province
+  { district: 'SOLUKHUMBU', tokens: ['everest', 'solukhumbu', 'khumbu', 'namche', 'gokyo', 'tengboche'] },
+  { district: 'ILAM', tokens: ['ilam'] },
+  { district: 'SANKHUWASABHA', tokens: ['makalu', 'kanchenjunga'] },
+  { district: 'SAPTARI', tokens: ['koshi tappu'] },
+  // Madhesh Province
+  { district: 'DHANUSA', tokens: ['janakpur'] },
+  // Bagmati Province
+  { district: 'KATHMANDU', tokens: ['kathmandu', 'pashupatinath', 'boudhanath', 'swayambhunath', 'monkey'] },
+  { district: 'BHAKTAPUR', tokens: ['bhaktapur', 'nagarkot'] },
+  { district: 'LALITPUR', tokens: ['patan', 'lalitpur'] },
+  { district: 'KAVREPALANCHOWK', tokens: ['dhulikhel', 'namobuddha'] },
   { district: 'CHITWAN', tokens: ['chitwan', 'sauraha'] },
+  { district: 'RASUWA', tokens: ['langtang', 'gosaikunda', 'helambu'] },
+  { district: 'NUWAKOT', tokens: ['trisuli'] },
+  // Gandaki Province
+  { district: 'KASKI', tokens: ['pokhara', 'kaski', 'paragliding'] },
+  { district: 'MANANG', tokens: ['manang', 'tilicho', 'annapurna'] },
+  { district: 'MUSTANG', tokens: ['mustang', 'muktinath', 'jomsom', 'upper mustang'] },
+  { district: 'MYAGDI', tokens: ['poon hill', 'ghorepani'] },
+  { district: 'GORKHA', tokens: ['gorkha', 'manaslu'] },
+  { district: 'TANAHU', tokens: ['bandipur'] },
+  // Lumbini Province
   { district: 'RUPANDEHI', tokens: ['lumbini', 'rupandehi', 'bhairahawa'] },
-  { district: 'MANANG', tokens: ['manang'] },
-  { district: 'MUSTANG', tokens: ['mustang', 'muktinath'] },
-  { district: 'SOLUKHUMBU', tokens: ['everest', 'solukhumbu', 'khumbu', 'namche'] },
+  { district: 'BARDIYA', tokens: ['bardia', 'bardiya'] },
+  { district: 'PALPA', tokens: ['tansen', 'palpa'] },
+  { district: 'KAPILVASTU', tokens: ['tilaurakot', 'kapilvastu'] },
+  // Karnali Province
+  { district: 'MUGU', tokens: ['rara'] },
+  { district: 'DOLPA', tokens: ['dolpo', 'dolpa', 'phoksundo', 'shey'] },
+  { district: 'JUMLA', tokens: ['jumla'] },
+  // Sudurpashchim Province
+  { district: 'KAILALI', tokens: ['shuklaphanta'] },
+  { district: 'BAJHANG', tokens: ['khaptad'] },
+  { district: 'DARCHULA', tokens: ['api'] },
 ];
 
 const DISTRICT_ALIASES = {
@@ -175,4 +203,41 @@ export function getDistrictPointForDestination(destination) {
 
 export function getTerrainForDestination(destination) {
   return getTerrainForDistrict(getDistrictForDestination(destination));
+}
+
+const DISTRICT_TO_PROVINCE = {
+  // Koshi
+  TAPLEJUNG: 'Koshi', PANCHTHAR: 'Koshi', ILAM: 'Koshi', JHAPA: 'Koshi',
+  MORANG: 'Koshi', SUNSARI: 'Koshi', DHANKUTA: 'Koshi', TEHRATHUM: 'Koshi',
+  BHOJPUR: 'Koshi', SOLUKHUMBU: 'Koshi', OKHALDHUNGA: 'Koshi', KHOTANG: 'Koshi',
+  UDAYAPUR: 'Koshi', SANKHUWASABHA: 'Koshi',
+  // Madhesh
+  SAPTARI: 'Madhesh', SIRAHA: 'Madhesh', DHANUSA: 'Madhesh', MAHOTTARI: 'Madhesh',
+  SARLAHI: 'Madhesh', RAUTAHAT: 'Madhesh', BARA: 'Madhesh', PARSA: 'Madhesh',
+  // Bagmati
+  SINDHULI: 'Bagmati', RAMECHHAP: 'Bagmati', DOLAKHA: 'Bagmati',
+  KAVREPALANCHOWK: 'Bagmati', SINDHUPALCHOK: 'Bagmati', RASUWA: 'Bagmati',
+  NUWAKOT: 'Bagmati', DHADING: 'Bagmati', BHAKTAPUR: 'Bagmati',
+  LALITPUR: 'Bagmati', KATHMANDU: 'Bagmati', MAKWANPUR: 'Bagmati', CHITWAN: 'Bagmati',
+  // Gandaki
+  GORKHA: 'Gandaki', MANANG: 'Gandaki', MUSTANG: 'Gandaki', MYAGDI: 'Gandaki',
+  BAGLUNG: 'Gandaki', LAMJUNG: 'Gandaki', TANAHU: 'Gandaki', KASKI: 'Gandaki',
+  SYANGJA: 'Gandaki', PARBAT: 'Gandaki', NAWALPUR: 'Gandaki',
+  ARGHAKHANCHI: 'Gandaki', GULMI: 'Gandaki', PALPA: 'Gandaki',
+  // Lumbini
+  KAPILVASTU: 'Lumbini', RUPANDEHI: 'Lumbini', PARASI: 'Lumbini',
+  DANG: 'Lumbini', PYUTHAN: 'Lumbini', ROLPA: 'Lumbini',
+  'EASTERN RUKUM': 'Lumbini', BANKE: 'Lumbini', BARDIYA: 'Lumbini',
+  // Karnali
+  DOLPA: 'Karnali', MUGU: 'Karnali', HUMLA: 'Karnali', JUMLA: 'Karnali',
+  KALIKOT: 'Karnali', DAILEKH: 'Karnali', JAJARKOT: 'Karnali',
+  'WESTERN RUKUM': 'Karnali', SALYAN: 'Karnali', SURKHET: 'Karnali',
+  // Sudurpashchim
+  BAJURA: 'Sudurpashchim', BAJHANG: 'Sudurpashchim', DARCHULA: 'Sudurpashchim',
+  ACHHAM: 'Sudurpashchim', DOTI: 'Sudurpashchim', DADELDHURA: 'Sudurpashchim',
+  BAITADI: 'Sudurpashchim', KAILALI: 'Sudurpashchim', KANCHANPUR: 'Sudurpashchim',
+};
+
+export function getProvinceForDistrict(districtName) {
+  return DISTRICT_TO_PROVINCE[normalizeDistrictName(districtName)] || null;
 }
