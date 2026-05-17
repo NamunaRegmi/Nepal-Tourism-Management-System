@@ -8,6 +8,8 @@ from .views import (
     ResetPasswordView,
     DestinationListView,
     DestinationDetailView,
+    DestinationRecommendationView,
+    DestinationExploreRecommendationView,
     HotelListView,
     ProviderHotelListView,
     HotelDetailView,
@@ -38,6 +40,7 @@ from .views import (
     TourGuideMeProfileView,
     GuideBookingListView,
     GuideBookingDetailView,
+    ChatView,
 )
 
 urlpatterns = [
@@ -52,6 +55,8 @@ urlpatterns = [
     # Destination URLs
     path('destinations/', DestinationListView.as_view(), name='destination-list'),
     path('destinations/<int:pk>/', DestinationDetailView.as_view(), name='destination-detail'),
+    path('destinations/<int:pk>/recommendations/', DestinationRecommendationView.as_view(), name='destination-recommendations'),
+    path('destinations/explore-recommendations/', DestinationExploreRecommendationView.as_view(), name='destination-explore-recommendations'),
     
     # Hotel URLs
     path('destinations/<int:destination_id>/hotels/', HotelListView.as_view(), name='hotel-list'),
@@ -91,6 +96,9 @@ urlpatterns = [
     path('payment/esewa/verify/', EsewaPaymentVerifyView.as_view(), name='esewa-payment-verify'),
     path('payment/esewa/callback/', EsewaPaymentCallbackView.as_view(), name='esewa-payment-callback'),
     
+    # Chatbot
+    path('chat/', ChatView.as_view(), name='chat'),
+
     # Admin URLs
     path('admin/stats/', AdminDashboardStatsView.as_view(), name='admin-stats'),
     path('admin/users/', AdminUserListView.as_view(), name='admin-users'),
