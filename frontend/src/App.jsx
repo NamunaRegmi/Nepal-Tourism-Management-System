@@ -308,9 +308,10 @@ export default function App() {
       case 'about':
         return <About onNavigate={handleNavigate} />;
       case 'destination-detail':
-        return <DestinationDetail 
-          destinationId={selectedDestination} 
-          onNavigate={handleNavigate} 
+        return <DestinationDetail
+          destinationId={selectedDestination}
+          onNavigate={handleNavigate}
+          onSelectDestination={openDestination}
         />;
       case 'admin-dashboard':
         return <AdminDashboard onNavigate={handleNavigate} />;
