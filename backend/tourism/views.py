@@ -17,7 +17,6 @@ from django.http import HttpResponseRedirect
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-from django.utils.encoding import force_bytes, force_str
 from django.db import IntegrityError, models
 from urllib.parse import urlparse
 from django.views.decorators.csrf import csrf_exempt
@@ -804,10 +803,16 @@ class RoomDetailView(APIView):
 # Package Views
 class PackageListView(APIView):
     permission_classes = [AllowAny]
-    
+
     def get(self, request):
-        packages = Package.objects.filter(is_active=True).select_related('provider').prefetch_related('destinations')
-        serializer = PackageSerializer(packages, many=True, context={'request': request})
+        qs = Package.objects.filter(is_active=True).select_related('provider').prefetch_related('destinations')
+        destination_id = request.query_params.get('destination_id')
+        if destination_id:
+            qs = qs.filter(
+                models.Q(destinations__id=destination_id) |
+                models.Q(destination__icontains=Destination.objects.filter(id=destination_id).values_list('name', flat=True).first() or '')
+            ).distinct()
+        serializer = PackageSerializer(qs, many=True, context={'request': request})
         return Response(serializer.data)
 
 
@@ -1271,6 +1276,359 @@ class GuideBookingDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class DestinationRecommendationView(APIView):
+    """
+    Gemini-powered destination recommendations.
+    Gemini ranks candidates by semantic similarity and writes a reason for each.
+    Falls back to scoring algorithm if Gemini is unavailable.
+    """
+    permission_classes = [AllowAny]
+
+    def _fallback_rank(self, source, candidates, user_interests, user_season):
+        """Simple scoring fallback used when Gemini call fails."""
+        SEASON_MONTHS = {
+            'spring': {'march', 'april', 'may', 'mar', 'apr'},
+            'summer': {'june', 'july', 'august', 'jun', 'jul', 'aug'},
+            'autumn': {'september', 'october', 'november', 'sep', 'oct', 'nov'},
+            'winter': {'december', 'january', 'february', 'dec', 'jan', 'feb'},
+        }
+        season_words = SEASON_MONTHS.get(user_season, set())
+        source_highlights = set(h.lower() for h in (source.highlights or []))
+        source_time = (source.best_time_to_visit or '').lower()
+
+        scored = []
+        for dest in candidates:
+            score = 0
+            if dest.province == source.province:
+                score += 3
+            dest_highlights = set(h.lower() for h in (dest.highlights or []))
+            score += len(source_highlights & dest_highlights)
+            dest_time = (dest.best_time_to_visit or '').lower()
+            if source_time and dest_time:
+                src_words = set(source_time.replace(',', ' ').split())
+                dst_words = set(dest_time.replace(',', ' ').split())
+                shared = src_words & dst_words - {'to', 'and', 'or', 'the', '-'}
+                score += min(len(shared), 2) * 2
+            if user_interests:
+                score += sum(2 for i in user_interests if any(i in h for h in dest_highlights))
+            if season_words and dest_time:
+                if set(dest_time.replace(',', ' ').split()) & season_words:
+                    score += 3
+            scored.append((score, dest))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [{'destination': d, 'reason': None} for _, d in scored[:4]]
+
+    def get(self, request, pk):
+        try:
+            source = Destination.objects.get(pk=pk, is_active=True)
+        except Destination.DoesNotExist:
+            return Response({'error': 'Destination not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        candidates = list(Destination.objects.filter(is_active=True).exclude(pk=pk))
+
+        raw_interests = request.query_params.get('interests', '')
+        user_interests = [i.strip().lower() for i in raw_interests.split(',') if i.strip()]
+        user_season = (request.query_params.get('season') or '').strip().lower()
+
+        ranked = self._groq_rank(source, candidates, user_interests, user_season)
+
+        results = []
+        for item in ranked:
+            dest = item['destination']
+            data = DestinationSerializer(dest, context={'request': request}).data
+            data['ai_reason'] = item['reason']
+            results.append(data)
+
+        return Response(results)
+
+    def _groq_rank(self, source, candidates, user_interests, user_season):
+        import os
+        api_key = os.getenv('GROQ_API_KEY', '')
+        if not api_key or not candidates:
+            return self._fallback_rank(source, candidates, user_interests, user_season)
+
+        try:
+            from groq import Groq
+
+            candidate_list = [
+                {
+                    'id': d.id,
+                    'name': d.name,
+                    'province': d.province,
+                    'description': (d.description or '')[:300],
+                    'highlights': d.highlights or [],
+                    'best_time_to_visit': d.best_time_to_visit or '',
+                }
+                for d in candidates
+            ]
+
+            prefs_text = ''
+            if user_interests:
+                prefs_text += f"- Interests: {', '.join(user_interests)}\n"
+            if user_season:
+                prefs_text += f"- Preferred travel season: {user_season}\n"
+            if not prefs_text:
+                prefs_text = '- No specific preferences given\n'
+
+            prompt = f"""You are a Nepal tourism recommendation assistant.
+
+The traveller is currently viewing:
+Name: {source.name}
+Province: {source.province}
+Description: {(source.description or '')[:400]}
+Highlights: {', '.join(source.highlights or [])}
+Best time to visit: {source.best_time_to_visit or 'unknown'}
+
+Traveller preferences:
+{prefs_text}
+From the candidate destinations below, choose the 4 most relevant and similar ones for this traveller.
+Rank them from most to least relevant.
+For each, write ONE short sentence (max 18 words) explaining why it suits this traveller.
+Be specific — mention highlights, season, or activity type. Do not start every reason with "A".
+
+Candidates:
+{json.dumps(candidate_list, indent=2)}
+
+Reply with ONLY a valid JSON array, no markdown fences, no extra text:
+[{{"id": <int>, "reason": "<sentence>"}}, ...]"""
+
+            client = Groq(api_key=api_key)
+            response = client.chat.completions.create(
+                model='llama-3.1-8b-instant',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.3,
+            )
+
+            raw = (response.choices[0].message.content or '').strip()
+            if raw.startswith('```'):
+                raw = raw.split('```')[1]
+                if raw.startswith('json'):
+                    raw = raw[4:]
+            raw = raw.strip()
+
+            groq_results = json.loads(raw)
+
+            dest_map = {d.id: d for d in candidates}
+            ranked = []
+            seen = set()
+            for item in groq_results:
+                did = item.get('id')
+                if did and did in dest_map and did not in seen:
+                    ranked.append({'destination': dest_map[did], 'reason': item.get('reason', '')})
+                    seen.add(did)
+                if len(ranked) == 4:
+                    break
+
+            if len(ranked) < 4:
+                fallback = self._fallback_rank(source, candidates, user_interests, user_season)
+                for fb in fallback:
+                    if fb['destination'].id not in seen:
+                        ranked.append(fb)
+                    if len(ranked) == 4:
+                        break
+
+            return ranked
+
+        except Exception as e:
+            print(f'Groq recommendation error: {e}')
+            return self._fallback_rank(source, candidates, user_interests, user_season)
+
+
+class DestinationExploreRecommendationView(APIView):
+    """
+    AI recommendations for the Explore page — no source destination.
+    Groq picks the best destinations based purely on user preferences.
+    Falls back to most-booked / first-added ordering if Groq fails.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        destinations = list(Destination.objects.filter(is_active=True))
+        if not destinations:
+            return Response([])
+
+        raw_interests = request.query_params.get('interests', '')
+        user_interests = [i.strip().lower() for i in raw_interests.split(',') if i.strip()]
+        user_season = (request.query_params.get('season') or '').strip().lower()
+
+        ranked = self._groq_rank(destinations, user_interests, user_season)
+
+        results = []
+        for item in ranked:
+            dest = item['destination']
+            data = DestinationSerializer(dest, context={'request': request}).data
+            data['ai_reason'] = item['reason']
+
+            hotels_qs = Hotel.objects.filter(destination=dest, is_active=True)
+            hotel_stats = hotels_qs.aggregate(
+                avg_rating=models.Avg('rating'),
+                min_price=models.Min('price_per_night'),
+                max_price=models.Max('price_per_night'),
+                total_rooms=models.Sum('total_rooms'),
+            )
+            hotel_count = hotels_qs.count()
+
+            booking_count = Booking.objects.filter(
+                models.Q(room__hotel__destination=dest) |
+                models.Q(package__destinations=dest)
+            ).count()
+
+            dest_name_lower = dest.name.lower()
+            matching_packages = Package.objects.filter(is_active=True).filter(
+                models.Q(destinations=dest) |
+                models.Q(destination__icontains=dest_name_lower.split()[0])
+            ).distinct()
+            package_count = matching_packages.count()
+
+            top_hotel = hotels_qs.order_by('-rating').first()
+
+            data['stats'] = {
+                'hotel_count': hotel_count,
+                'avg_rating': round(float(hotel_stats['avg_rating'] or 0), 1),
+                'min_price': float(hotel_stats['min_price'] or 0),
+                'max_price': float(hotel_stats['max_price'] or 0),
+                'total_rooms': int(hotel_stats['total_rooms'] or 0),
+                'package_count': package_count,
+                'booking_count': booking_count,
+                'highlights_count': len(dest.highlights or []),
+            }
+
+            data['top_hotel'] = {
+                'id': top_hotel.id,
+                'name': top_hotel.name,
+                'rating': float(top_hotel.rating),
+                'price_per_night': float(top_hotel.price_per_night),
+                'currency': top_hotel.currency,
+                'amenities': (top_hotel.amenities or [])[:3],
+            } if top_hotel else None
+
+            data['packages'] = [
+                {
+                    'id': p.id,
+                    'name': p.name,
+                    'price': float(p.price),
+                    'duration_days': p.duration_days,
+                    'max_people': p.max_people,
+                }
+                for p in matching_packages[:3]
+            ]
+
+            results.append(data)
+
+        return Response(results)
+
+    def _groq_rank(self, destinations, user_interests, user_season):
+        import os
+        api_key = os.getenv('GROQ_API_KEY', '')
+        if not api_key:
+            return [{'destination': d, 'reason': None} for d in destinations[:4]]
+
+        try:
+            from groq import Groq
+            from django.db.models import Avg, Min
+
+            # Pre-select a diverse subset: up to 3 per province, max 24 total,
+            # biased toward interest keywords when provided.
+            scored = []
+            for d in destinations:
+                text = f"{d.name} {' '.join(d.highlights or [])} {d.description or ''}".lower()
+                match_score = sum(1 for kw in user_interests if kw in text)
+                scored.append((match_score, d))
+
+            scored.sort(key=lambda x: -x[0])
+
+            # Pick at most 3 per province, capped at 24
+            province_counts: dict = {}
+            candidate_pool = []
+            for _, d in scored:
+                pc = province_counts.get(d.province, 0)
+                if pc < 3:
+                    candidate_pool.append(d)
+                    province_counts[d.province] = pc + 1
+                if len(candidate_pool) >= 24:
+                    break
+
+            dest_list = []
+            for d in candidate_pool:
+                h_stats = Hotel.objects.filter(destination=d, is_active=True).aggregate(
+                    avg_rating=Avg('rating'), min_price=Min('price_per_night')
+                )
+                dest_list.append({
+                    'id': d.id,
+                    'name': d.name,
+                    'province': d.province,
+                    'highlights': (d.highlights or [])[:4],
+                    'best_time': d.best_time_to_visit or '',
+                    'avg_hotel_rating': round(float(h_stats['avg_rating'] or 0), 1),
+                    'min_price_per_night': float(h_stats['min_price'] or 0),
+                })
+
+            if user_interests or user_season:
+                prefs_text = ''
+                if user_interests:
+                    prefs_text += f"- Interests: {', '.join(user_interests)}\n"
+                if user_season:
+                    prefs_text += f"- Travel season: {user_season}\n"
+                context = f"The traveller has these preferences:\n{prefs_text}"
+            else:
+                context = "The traveller is a first-time visitor to Nepal with no specific preferences yet."
+
+            prompt = f"""You are a Nepal tourism expert helping travellers discover destinations.
+
+{context}
+
+From the list of Nepal destinations below, recommend exactly 4 that best match this traveller.
+Rank them from most to least suitable.
+For each, write ONE engaging sentence (max 18 words) explaining why it's perfect for them.
+Be specific — mention the type of experience, activity, or season. Vary the sentence structure.
+
+Destinations:
+{json.dumps(dest_list, indent=2)}
+
+Reply with ONLY a valid JSON array, no markdown fences, no extra text:
+[{{"id": <int>, "reason": "<sentence>"}}, ...]"""
+
+            client = Groq(api_key=api_key)
+            response = client.chat.completions.create(
+                model='llama-3.1-8b-instant',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.4,
+            )
+
+            raw = (response.choices[0].message.content or '').strip()
+            if raw.startswith('```'):
+                raw = raw.split('```')[1]
+                if raw.startswith('json'):
+                    raw = raw[4:]
+            raw = raw.strip()
+
+            results = json.loads(raw)
+            dest_map = {d.id: d for d in destinations}
+            ranked = []
+            seen = set()
+            for item in results:
+                did = item.get('id')
+                if did and did in dest_map and did not in seen:
+                    ranked.append({'destination': dest_map[did], 'reason': item.get('reason', '')})
+                    seen.add(did)
+                if len(ranked) == 4:
+                    break
+
+            if len(ranked) < 4:
+                for d in destinations:
+                    if d.id not in seen:
+                        ranked.append({'destination': d, 'reason': None})
+                    if len(ranked) == 4:
+                        break
+
+            return ranked
+
+        except Exception as e:
+            print(f'Groq explore recommendation error: {e}')
+            return [{'destination': d, 'reason': None} for d in destinations[:4]]
+
+
 class KhaltiVerifyView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -1724,3 +2082,71 @@ class EsewaPaymentCallbackView(APIView):
             return HttpResponseRedirect(
                 f"{redirect_origin}{failure_redirect_path}?{error_query.urlencode()}"
             )
+
+
+CHAT_SYSTEM_PROMPT = """You are a knowledgeable and friendly Nepal Tourism Assistant for the Nepal Tourism Management System website.
+
+Your role:
+- Answer ANY question related to Nepal tourism, travel, culture, food, festivals, trekking, hotels, visa, currency, transport, weather, safety, and bookings.
+- Be conversational, warm, and helpful — like a local expert who knows Nepal deeply.
+- Handle typos and informal language gracefully; understand what the user means even if spelled incorrectly.
+- Keep responses concise but complete — use bullet points and short paragraphs for readability.
+- If asked about specific hotels, packages, or bookings on this platform, guide the user to explore the Destinations and Hotels sections of the website.
+- For pricing, give realistic NPR/USD ranges based on current Nepal tourism standards.
+- Always be encouraging about visiting Nepal.
+
+Key knowledge areas:
+- Destinations: Kathmandu, Pokhara, Chitwan, Lumbini, Everest Base Camp, Annapurna Circuit, Mustang, Manang, Langtang
+- Trekking: routes, difficulty levels, required permits (TIMS, ACAP, Sagarmatha), best seasons
+- Culture: Hinduism, Buddhism, Newari culture, festivals (Dashain, Tihar, Holi, Indra Jatra, Buddha Jayanti, Losar)
+- Food: Dal bhat, Momos, Thukpa, Sel roti, Newari cuisine, Thakali food
+- Transport: Domestic flights, tourist buses, local transport
+- Visa: Visa on arrival, fees, duration (15/30/90 days), SAARC free visa
+- Currency: NPR, exchange rates, ATM availability
+- Safety: altitude sickness, water safety, trekking safety, emergency contacts
+- Weather: spring (Mar-May), monsoon (Jun-Aug), autumn (Sep-Nov), winter (Dec-Feb)
+- Adventure: paragliding in Pokhara, rafting, bungee jumping, mountain flights, wildlife safaris
+
+Do NOT answer questions unrelated to Nepal tourism or travel. Politely redirect if asked about unrelated topics."""
+
+
+class ChatView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        import os
+        message = (request.data.get('message') or '').strip()
+        history = request.data.get('history') or []
+
+        if not message:
+            return Response({'error': 'Message is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        api_key = os.getenv('GROQ_API_KEY', '')
+        if not api_key:
+            return Response({'reply': 'AI assistant is temporarily unavailable. Please try again later.'})
+
+        try:
+            from groq import Groq
+            client = Groq(api_key=api_key)
+
+            messages = [{'role': 'system', 'content': CHAT_SYSTEM_PROMPT}]
+
+            for turn in history[-10:]:
+                role = turn.get('role')
+                content = turn.get('content', '')
+                if role in ('user', 'assistant') and content:
+                    messages.append({'role': role, 'content': content})
+
+            messages.append({'role': 'user', 'content': message})
+
+            completion = client.chat.completions.create(
+                model='llama-3.1-8b-instant',
+                messages=messages,
+                temperature=0.7,
+                max_tokens=600,
+            )
+            reply = completion.choices[0].message.content.strip()
+            return Response({'reply': reply})
+
+        except Exception as e:
+            return Response({'reply': 'Sorry, I encountered an error. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
