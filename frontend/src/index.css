@@ -42,3 +42,7 @@ body {
 .homepage-section-heading {
   text-align: left;
 }
+
+/* Hide scrollbar on slider tracks */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
