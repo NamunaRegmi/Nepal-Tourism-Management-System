@@ -2,9 +2,9 @@ import { GoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Mountain, Users, Shield, Building2, MapPin } from 'lucide-react';
+import { Users, Shield, Building2, MapPin, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
 import { notifyAppDataChanged } from '@/lib/dataSync';
 import { getLandingPageForRole } from '@/lib/roleNavigation';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const AuthModal = ({ isOpen, onClose, onNavigate }) => {
   const [selectedRole, setSelectedRole] = useState(null);
@@ -23,7 +25,42 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
   });
   const [error, setError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState({});
   const isAdminRole = selectedRole === 'admin';
+
+  const togglePasswordVisibility = (field) => {
+    setVisiblePasswords((current) => ({
+      ...current,
+      [field]: !current[field],
+    }));
+  };
+
+  const renderPasswordInput = ({ id, field, placeholder, value, onChange }) => {
+    const isVisible = Boolean(visiblePasswords[field]);
+    const Icon = isVisible ? EyeOff : Eye;
+
+    return (
+      <div className="relative">
+        <Input
+          id={id}
+          type={isVisible ? 'text' : 'password'}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          className="pr-10"
+        />
+        <button
+          type="button"
+          onClick={() => togglePasswordVisibility(field)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-900"
+          aria-label={isVisible ? 'Hide password' : 'Show password'}
+          title={isVisible ? 'Hide password' : 'Show password'}
+        >
+          <Icon className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  };
 
   const handleGoogleSuccess = async (credentialResponse) => {
     if (isAdminRole) {
@@ -32,7 +69,7 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
     }
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/auth/google/', {
+      const response = await axios.post(`${API_BASE}/api/auth/google/`, {
         credential: credentialResponse.credential,
         role: selectedRole
       });
@@ -53,8 +90,8 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
       onNavigate(getLandingPageForRole(authenticatedRole));
     } catch (error) {
       console.error('Login failed:', error);
-      toast.error('Google login failed. Please try again.');
-      setError('Google login failed. Please try again.');
+      const errorMsg = error.response?.data?.error || 'Google login failed. Please try again.';
+      toast.error(errorMsg);
     }
   };
 
@@ -102,7 +139,7 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
         payload.name = formData.name;
       }
 
-      const response = await axios.post(`http://127.0.0.1:8000/api/auth/${endpoint}/`, payload);
+      const response = await axios.post(`${API_BASE}/api/auth/${endpoint}/`, payload);
 
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
@@ -124,7 +161,6 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
     } catch (error) {
       const errorMsg = error.response?.data?.error || 'Authentication failed';
       toast.error(errorMsg);
-      setError(errorMsg);
     }
   };
 
@@ -163,7 +199,7 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
                     return;
                   }
                   try {
-                    await axios.post('http://127.0.0.1:8000/api/auth/forgot-password/', {
+                    await axios.post(`${API_BASE}/api/auth/forgot-password/`, {
                       email: formData.email
                     });
                     alert('Password reset email sent! Check your inbox.');
@@ -189,10 +225,7 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
         <DialogHeader className="text-center pb-2">
           <div className="flex justify-center mb-2">
             <div className="flex items-center gap-2">
-              <Mountain className="h-8 w-8 text-blue-600" />
-              <DialogTitle className="text-2xl font-bold text-gray-900">
-                Nepal Tourism
-              </DialogTitle>
+              <img src="/assets/nepal-tourism-logo.svg" alt="Nepal Tourism" className="h-10 w-auto max-w-[200px]" />
             </div>
           </div>
         </DialogHeader>
@@ -242,12 +275,6 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
                 </Button>
               </div>
 
-              {isAdminRole && (
-                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Admin accounts are provisioned separately. Use your existing email and password to sign in.
-                </div>
-              )}
-
               <Tabs key={selectedRole} defaultValue="login" className="w-full">
                 {error && (
                   <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -255,10 +282,12 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
                   </div>
                 )}
 
-                <TabsList className={`grid w-full mb-4 ${isAdminRole ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                  <TabsTrigger value="login">Login</TabsTrigger>
-                  {!isAdminRole && <TabsTrigger value="signup">Sign Up</TabsTrigger>}
-                </TabsList>
+                {!isAdminRole && (
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="login">Login</TabsTrigger>
+                    <TabsTrigger value="signup">Sign Up</TabsTrigger>
+                  </TabsList>
+                )}
 
                 <TabsContent value="login" className="space-y-4">
                   <div className="space-y-2">
@@ -274,13 +303,13 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
 
                   <div className="space-y-2">
                     <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    />
+                    {renderPasswordInput({
+                      id: 'password',
+                      field: 'loginPassword',
+                      placeholder: 'Enter your password',
+                      value: formData.password,
+                      onChange: (e) => setFormData({ ...formData, password: e.target.value }),
+                    })}
                   </div>
 
                   <div className="flex justify-end">
@@ -348,24 +377,24 @@ const AuthModal = ({ isOpen, onClose, onNavigate }) => {
 
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="Create a password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    />
+                    {renderPasswordInput({
+                      id: 'signup-password',
+                      field: 'signupPassword',
+                      placeholder: 'Create a password',
+                      value: formData.password,
+                      onChange: (e) => setFormData({ ...formData, password: e.target.value }),
+                    })}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="confirm-password">Confirm Password</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      placeholder="Confirm your password"
-                      value={formData.confirmPassword}
-                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    />
+                    {renderPasswordInput({
+                      id: 'confirm-password',
+                      field: 'confirmPassword',
+                      placeholder: 'Confirm your password',
+                      value: formData.confirmPassword,
+                      onChange: (e) => setFormData({ ...formData, confirmPassword: e.target.value }),
+                    })}
                   </div>
 
                   <Button

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, List, Grid, ChevronRight, Info, CloudSun, Mountain, Trees, Waves, Sparkles, SlidersHorizontal, Calendar, Hotel, Package, Star, Users, TrendingUp, ChevronLeft } from 'lucide-react';
+import { MapPin, List, Grid, ChevronRight, Info, CloudSun, Mountain, Trees, Waves, Sparkles, SlidersHorizontal, Calendar, Hotel, Package, Star, Users, ChevronLeft, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { destinationService } from '@/services/api';
@@ -116,15 +116,14 @@ const DESTINATION_IMAGES = {
 };
 
 const getDestinationImage = (dest) => {
-    if (!dest) return 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80';
-    // try multi-word keys first (longest match wins)
-    const lower = (dest.name || '').toLowerCase();
-    const sorted = Object.keys(DESTINATION_IMAGES).sort((a, b) => b.length - a.length);
-    for (const key of sorted) {
-        if (lower.includes(key)) return DESTINATION_IMAGES[key];
-    }
-    // fall back to whatever is stored in DB
-    return dest.image_url || dest.image || 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80';
+    const placeholder = '/assets/nepal-tourism-mark.svg';
+    if (!dest) return placeholder;
+    if (dest.image_url || dest.image) return dest.image_url || dest.image;
+    const name = (dest.name || '').toLowerCase().trim();
+    const key = Object.keys(DESTINATION_IMAGES)
+        .sort((a, b) => b.length - a.length)
+        .find(k => name.includes(k));
+    return key ? DESTINATION_IMAGES[key] : placeholder;
 };
 
 const NepalMapViewport = ({ districtMapData }) => {
@@ -175,6 +174,7 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState('list');
     const [error, setError] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectedTerrain, setSelectedTerrain] = useState('All');
     const [selectedDistrict, setSelectedDistrict] = useState(null);
     const [districtMapData, setDistrictMapData] = useState(null);
@@ -185,6 +185,7 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
     const [aiRecs, setAiRecs] = useState([]);
     const [aiLoading, setAiLoading] = useState(true);
     const sliderRef = useRef(null);
+    const aiRequestKeyRef = useRef('');
 
     const fetchDestinations = useCallback(async () => {
         try {
@@ -206,6 +207,16 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
     }, []);
 
     const fetchAiRecs = useCallback(async () => {
+        const requestKey = JSON.stringify({
+            interests: prefs.interests,
+            season: prefs.season,
+        });
+
+        if (aiRequestKeyRef.current === requestKey) {
+            return;
+        }
+
+        aiRequestKeyRef.current = requestKey;
         setAiLoading(true);
         try {
             const params = {};
@@ -214,6 +225,7 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
             const res = await destinationService.getExploreRecommendations(params);
             setAiRecs(res.data || []);
         } catch {
+            aiRequestKeyRef.current = '';
             setAiRecs([]);
         } finally {
             setAiLoading(false);
@@ -286,6 +298,23 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
     const selectedProvince = selectedDistrictKey ? getProvinceForDistrict(selectedDistrictKey) : null;
 
     const filteredDestinations = destinations.filter((dest) => {
+        const query = searchQuery.trim().toLowerCase();
+        if (query) {
+            const district = formatDistrictLabel(getDistrictForDestination(dest)).toLowerCase();
+            const searchable = [
+                dest.name,
+                dest.province,
+                district,
+                dest.description,
+                dest.best_time_to_visit,
+                ...(dest.highlights || []),
+            ].filter(Boolean).join(' ').toLowerCase();
+
+            if (!searchable.includes(query)) {
+                return false;
+            }
+        }
+
         // District filter: exact district match OR province-level match
         if (selectedDistrictKey) {
             const destDistrict = getDistrictForDestination(dest);
@@ -319,6 +348,11 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
     const clearTerrainSelection = () => {
         setSelectedDistrict(null);
         setSelectedTerrain('All');
+    };
+
+    const clearAllFilters = () => {
+        setSearchQuery('');
+        clearTerrainSelection();
     };
 
     const getDistrictStyle = (feature) => {
@@ -403,10 +437,10 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
             <div className="max-w-7xl mx-auto px-4 pb-12">
                 <div className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 text-white shadow-sm">
                     <div className="grid items-stretch lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
-                        <div className="flex h-full flex-col p-6 md:p-8">
+                        <div className="flex h-full flex-col p-4 sm:p-6 md:p-8">
                             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-200">Terrain Explorer</p>
-                            <h2 className="mt-2 text-3xl font-bold tracking-tight">Click a Nepal district to auto-select its terrain</h2>
-                            <p className="mt-3 max-w-2xl text-sm text-blue-100/90 md:text-base">
+                            <h2 className="mt-2 text-xl sm:text-3xl font-bold tracking-tight">Click a Nepal district to auto-select its terrain</h2>
+                            <p className="mt-2 sm:mt-3 max-w-2xl text-xs sm:text-sm text-blue-100/90 md:text-base hidden sm:block">
                                 Use the map to switch between Himalayan, Hill, and Terai experiences. Clicking a district focuses the explorer on the terrain that shapes travel there.
                             </p>
 
@@ -480,12 +514,12 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
                         </div>
 
                         <div className="border-t border-white/10 p-4 md:p-6 lg:border-l lg:border-t-0 lg:p-6">
-                            <div className="relative h-full min-h-[360px] overflow-hidden rounded-[24px] border border-white/12 bg-slate-900/35 shadow-inner">
+                            <div className="relative h-full min-h-[240px] sm:min-h-[360px] overflow-hidden rounded-[24px] border border-white/12 bg-slate-900/35 shadow-inner">
                                 <MapContainer
                                     center={[28.25, 84.1]}
                                     zoom={7}
                                     scrollWheelZoom={true}
-                                    style={{ height: '100%', minHeight: '360px', width: '100%' }}
+                                    style={{ height: '100%', minHeight: '240px', width: '100%' }}
                                     zoomControl={true}
                                     dragging={true}
                                     doubleClickZoom={true}
@@ -530,33 +564,66 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
 
                 <div>
 
+                    {/* Sticky search bar — always visible after scrolling past the map */}
+                    <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200 -mx-4 px-4 py-3 mb-6 shadow-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <div className="relative flex-1">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="search"
+                                    value={searchQuery}
+                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                    placeholder="Search places, province, activities..."
+                                    className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                        aria-label="Clear search"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex items-center justify-between sm:justify-end gap-3">
+                                <p className="text-xs text-slate-400 sm:hidden">
+                                    {sortedDestinations.length} destination{sortedDestinations.length === 1 ? '' : 's'}
+                                    {searchQuery.trim() ? ` for "${searchQuery.trim()}"` : ''}
+                                </p>
+                                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg flex-shrink-0">
+                                    <Button
+                                        variant={viewMode === 'list' ? 'white' : 'ghost'}
+                                        size="sm"
+                                        className={viewMode === 'list' ? 'bg-white shadow-sm h-7 px-2' : 'h-7 px-2'}
+                                        onClick={() => setViewMode('list')}
+                                    >
+                                        <List className="h-3.5 w-3.5 sm:mr-1" /><span className="hidden sm:inline text-xs">List</span>
+                                    </Button>
+                                    <Button
+                                        variant={viewMode === 'grid' ? 'white' : 'ghost'}
+                                        size="sm"
+                                        className={viewMode === 'grid' ? 'bg-white shadow-sm h-7 px-2' : 'h-7 px-2'}
+                                        onClick={() => setViewMode('grid')}
+                                    >
+                                        <Grid className="h-3.5 w-3.5 sm:mr-1" /><span className="hidden sm:inline text-xs">Grid</span>
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Main Content */}
                     <main>
-                        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <header className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
-                                <h1 className="text-2xl font-bold text-gray-900">Explore Destinations in Nepal</h1>
-                                <p className="text-gray-500 text-sm mt-1">
+                                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Explore Destinations in Nepal</h1>
+                                <p className="text-gray-500 text-sm mt-1 hidden sm:block">
                                     {sortedDestinations.length} destination{sortedDestinations.length === 1 ? '' : 's'} available
                                     {selectedTerrain !== 'All' ? ` in the ${selectedTerrain} terrain` : ''}
+                                    {searchQuery.trim() ? ` matching "${searchQuery.trim()}"` : ''}
                                 </p>
-                            </div>
-                            <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
-                                <Button
-                                    variant={viewMode === 'list' ? 'white' : 'ghost'}
-                                    size="sm"
-                                    className={viewMode === 'list' ? 'bg-white shadow-sm' : ''}
-                                    onClick={() => setViewMode('list')}
-                                >
-                                    <List className="h-4 w-4 mr-2" /> List
-                                </Button>
-                                <Button
-                                    variant={viewMode === 'grid' ? 'white' : 'ghost'}
-                                    size="sm"
-                                    className={viewMode === 'grid' ? 'bg-white shadow-sm' : ''}
-                                    onClick={() => setViewMode('grid')}
-                                >
-                                    <Grid className="h-4 w-4 mr-2" /> Grid
-                                </Button>
                             </div>
                         </header>
 
@@ -816,12 +883,14 @@ const DestinationResults = ({ onNavigate, onSelectDestination }) => {
                                     <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                                     <h3 className="text-lg font-semibold text-gray-600 mb-2">No destinations found</h3>
                                     <p className="text-gray-500 mb-4">
-                                        {selectedTerrain === 'All'
-                                            ? "We couldn't find any destinations at the moment."
-                                            : `No destinations currently match the ${selectedTerrain} terrain filter.`}
+                                        {searchQuery.trim()
+                                            ? `No destinations match "${searchQuery.trim()}".`
+                                            : selectedTerrain === 'All'
+                                                ? "We couldn't find any destinations at the moment."
+                                                : `No destinations currently match the ${selectedTerrain} terrain filter.`}
                                     </p>
-                                    <Button onClick={clearTerrainSelection} className="bg-blue-600 hover:bg-blue-700">
-                                        Clear filter
+                                    <Button onClick={clearAllFilters} className="bg-blue-600 hover:bg-blue-700">
+                                        Clear filters
                                     </Button>
                                 </div>
                             ) : (

@@ -1,20 +1,57 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { Mountain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Eye, EyeOff } from 'lucide-react';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const ResetPassword = ({ onNavigate }) => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [visiblePasswords, setVisiblePasswords] = useState({});
 
   const pathParts = window.location.pathname.split('/');
   const uid = pathParts[2];
   const token = pathParts[3];
+
+  const togglePasswordVisibility = (field) => {
+    setVisiblePasswords((current) => ({
+      ...current,
+      [field]: !current[field],
+    }));
+  };
+
+  const renderPasswordInput = ({ id, field, placeholder, value, onChange }) => {
+    const isVisible = Boolean(visiblePasswords[field]);
+    const Icon = isVisible ? EyeOff : Eye;
+
+    return (
+      <div className="relative">
+        <Input
+          id={id}
+          type={isVisible ? 'text' : 'password'}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          className="pr-10"
+        />
+        <button
+          type="button"
+          onClick={() => togglePasswordVisibility(field)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-900"
+          aria-label={isVisible ? 'Hide password' : 'Show password'}
+          title={isVisible ? 'Hide password' : 'Show password'}
+        >
+          <Icon className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,7 +69,7 @@ const ResetPassword = ({ onNavigate }) => {
     }
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/auth/reset-password/', {
+      const response = await axios.post(`${API_BASE}/api/auth/reset-password/`, {
         uid,
         token,
         new_password: newPassword
@@ -62,7 +99,7 @@ const ResetPassword = ({ onNavigate }) => {
         <Card className="border-2 shadow-2xl">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
-              <Mountain className="h-10 w-10 text-blue-600" />
+              <img src="/assets/nepal-tourism-logo.svg" alt="Nepal Tourism" className="h-10 w-auto" />
             </div>
             <CardTitle>Reset Your Password</CardTitle>
             <CardDescription>Enter your new password below</CardDescription>
@@ -86,24 +123,24 @@ const ResetPassword = ({ onNavigate }) => {
 
                 <div className="space-y-2">
                   <Label htmlFor="new-password">New Password</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    placeholder="Enter new password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
+                  {renderPasswordInput({
+                    id: 'new-password',
+                    field: 'newPassword',
+                    placeholder: 'Enter new password',
+                    value: newPassword,
+                    onChange: (e) => setNewPassword(e.target.value),
+                  })}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="confirm-new-password">Confirm Password</Label>
-                  <Input
-                    id="confirm-new-password"
-                    type="password"
-                    placeholder="Confirm new password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                  />
+                  {renderPasswordInput({
+                    id: 'confirm-new-password',
+                    field: 'confirmPassword',
+                    placeholder: 'Confirm new password',
+                    value: confirmPassword,
+                    onChange: (e) => setConfirmPassword(e.target.value),
+                  })}
                 </div>
 
                 <Button 

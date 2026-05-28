@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Mountain, Compass, Package, Heart, Settings, LogOut, Plus, Hotel, CalendarCheck, DollarSign, Users, TrendingUp, Search, Menu, Bell, BarChart3, MapPin, Star, Eye, Edit, Trash2, Save, X, Upload } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Package, Settings, LogOut, Plus, Hotel, CalendarCheck, DollarSign, Users, Search, Menu, Bell, BarChart3, Star, Edit, Trash2, Save, TrendingUp, X, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -34,6 +33,11 @@ const ProviderDashboard = ({ onNavigate }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [lastSeenAt, setLastSeenAt] = useState(
+    () => parseInt(localStorage.getItem('provider_notif_seen_at') || '0', 10)
+  );
+  const notifRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [bookings, setBookings] = useState([]);
   const [hotels, setHotels] = useState([]);
@@ -128,6 +132,50 @@ const ProviderDashboard = ({ onNavigate }) => {
   }, [fetchData]);
 
   useAppDataSync(fetchData);
+
+  // Close notification dropdown on outside click
+  useEffect(() => {
+    if (!showNotifications) return;
+    const handler = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showNotifications]);
+
+  const openNotifications = () => {
+    const now = Date.now();
+    localStorage.setItem('provider_notif_seen_at', String(now));
+    setLastSeenAt(now);
+    setShowNotifications(o => !o);
+  };
+
+  const pendingBookings = bookings.filter(b => b.status === 'pending');
+  const recentBookings = bookings.slice(0, 5);
+  const notifItems = [
+    ...pendingBookings.map(b => ({
+      id: `pending-${b.id}`,
+      title: `Booking #${b.id} awaiting confirmation`,
+      sub: `Rs. ${Number(b.total_price).toLocaleString('en-IN')} · ${b.room_details?.room_type || b.package_details?.name || 'Item'}`,
+      time: new Date(b.created_at).toLocaleString(),
+      timestamp: new Date(b.created_at).getTime(),
+      urgent: true,
+    })),
+    ...recentBookings
+      .filter(b => b.status !== 'pending')
+      .map(b => ({
+        id: `recent-${b.id}`,
+        title: `Booking #${b.id} — ${b.status}`,
+        sub: b.room_details?.room_type || b.package_details?.name || 'Item',
+        time: new Date(b.created_at).toLocaleString(),
+        timestamp: new Date(b.created_at).getTime(),
+        urgent: false,
+      })),
+  ].map(n => ({ ...n, unread: n.timestamp > lastSeenAt }));
+
+  const unreadCount = notifItems.filter(n => n.unread).length;
 
   const handleLogout = async () => {
     try {
@@ -335,6 +383,27 @@ const ProviderDashboard = ({ onNavigate }) => {
   const isMyHotel = (hotel) =>
     user?.id != null && Number(hotel.provider) === Number(user.id);
 
+  const monthlyEarnings = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const monthName = d.toLocaleDateString('en', { month: 'short' });
+      const revenue = bookings
+        .filter(b => b.created_at && b.created_at.startsWith(key))
+        .reduce((sum, b) => sum + toMoneyNumber(b.total_price), 0);
+      const count = bookings.filter(b => b.created_at && b.created_at.startsWith(key)).length;
+      return { key, month: monthName, revenue, count };
+    });
+  }, [bookings]);
+
+  const bookingStatusCounts = useMemo(() => ({
+    confirmed: bookings.filter(b => b.status === 'confirmed').length,
+    pending: bookings.filter(b => b.status === 'pending').length,
+    cancelled: bookings.filter(b => b.status === 'cancelled').length,
+    completed: bookings.filter(b => b.status === 'completed').length,
+  }), [bookings]);
+
   if (selectedHotelForRooms) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -383,12 +452,60 @@ const ProviderDashboard = ({ onNavigate }) => {
                 className="pl-10 w-64"
               />
             </div>
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="h-5 w-5" />
-              {stats.pendingBookings > 0 && (
-                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+            <div className="relative" ref={notifRef}>
+              <Button variant="ghost" size="sm" className="relative" onClick={openNotifications}>
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                    <h3 className="font-semibold text-gray-900 text-sm">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                        {unreadCount} new
+                      </span>
+                    )}
+                  </div>
+                  <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+                    {notifItems.length === 0 ? (
+                      <p className="text-sm text-gray-400 text-center py-8">No bookings yet</p>
+                    ) : (
+                      notifItems.map(n => (
+                        <div key={n.id} className={`flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${n.unread ? 'bg-orange-50' : ''}`}>
+                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.urgent ? 'bg-orange-500' : 'bg-gray-400'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{n.title}</p>
+                            <p className="text-xs text-gray-500 truncate">{n.sub}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{n.time}</p>
+                          </div>
+                          {n.urgent && (
+                            <span className="text-[10px] font-semibold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                              Action needed
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {pendingBookings.length > 0 && (
+                    <div className="px-4 py-2 border-t border-gray-100 bg-gray-50">
+                      <button
+                        onClick={() => { setActiveTab('bookings'); setShowNotifications(false); }}
+                        className="text-xs text-blue-600 hover:underline font-medium"
+                      >
+                        View all bookings →
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
-            </Button>
+            </div>
             <div className="relative">
               <Avatar className="h-8 w-8 cursor-pointer" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
                 <AvatarFallback className="bg-gradient-to-r from-green-600 to-blue-600 text-white">
@@ -413,91 +530,72 @@ const ProviderDashboard = ({ onNavigate }) => {
         </header>
 
       <div className="flex">
-        <aside className={`${sidebarOpen ? 'block' : 'hidden'} lg:block w-64 bg-white border-r border-gray-200 min-h-screen`}>
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        <aside className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-50 shadow-2xl' : 'hidden'} lg:relative lg:block w-64 bg-white border-r border-gray-200 min-h-screen`}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 lg:hidden">
+            <span className="font-semibold text-gray-700 text-sm">Navigation</span>
+            <button onClick={() => setSidebarOpen(false)} className="p-1 rounded hover:bg-gray-100">
+              <X className="h-4 w-4 text-gray-500" />
+            </button>
+          </div>
           <nav className="p-4 space-y-2">
-            <Button 
-              variant="ghost" 
-              className={`w-full justify-start ${activeTab === 'overview' ? 'text-green-600 bg-green-50' : ''}`}
-              onClick={() => setActiveTab('overview')}
-            >
-              <BarChart3 className="h-4 w-4 mr-3" />
-              Dashboard
-            </Button>
-            <Button 
-              variant="ghost" 
-              className={`w-full justify-start ${activeTab === 'properties' ? 'text-green-600 bg-green-50' : ''}`}
-              onClick={() => setActiveTab('properties')}
-            >
-              <Hotel className="h-4 w-4 mr-3" />
-              My Properties ({filteredHotels.length})
-            </Button>
-            <Button 
-              variant="ghost" 
-              className={`w-full justify-start ${activeTab === 'packages' ? 'text-green-600 bg-green-50' : ''}`}
-              onClick={() => setActiveTab('packages')}
-            >
-              <Package className="h-4 w-4 mr-3" />
-              Tour Packages
-            </Button>
-            <Button 
-              variant="ghost" 
-              className={`w-full justify-start ${activeTab === 'bookings' ? 'text-green-600 bg-green-50' : ''}`}
-              onClick={() => setActiveTab('bookings')}
-            >
-              <CalendarCheck className="h-4 w-4 mr-3" />
-              Bookings ({filteredBookings.length})
-            </Button>
-            <Button 
-              variant="ghost" 
-              className={`w-full justify-start ${activeTab === 'earnings' ? 'text-green-600 bg-green-50' : ''}`}
-              onClick={() => setActiveTab('earnings')}
-            >
-              <DollarSign className="h-4 w-4 mr-3" />
-              Earnings
-            </Button>
-            <Button 
-              variant="ghost" 
-              className={`w-full justify-start ${activeTab === 'reviews' ? 'text-green-600 bg-green-50' : ''}`}
-              onClick={() => setActiveTab('reviews')}
-            >
-              <Star className="h-4 w-4 mr-3" />
-              Reviews
-            </Button>
+            {[
+              { key: 'overview', icon: BarChart3, label: 'Dashboard' },
+              { key: 'properties', icon: Hotel, label: `My Properties (${filteredHotels.length})` },
+              { key: 'packages', icon: Package, label: 'Tour Packages' },
+              { key: 'bookings', icon: CalendarCheck, label: `Bookings (${filteredBookings.length})` },
+              { key: 'earnings', icon: DollarSign, label: 'Earnings' },
+              { key: 'reviews', icon: Star, label: 'Reviews' },
+            ].map(({ key, icon: Icon, label }) => (
+              <Button
+                key={key}
+                variant="ghost"
+                className={`w-full justify-start ${activeTab === key ? 'text-green-600 bg-green-50' : ''}`}
+                onClick={() => { setActiveTab(key); setSidebarOpen(false); }}
+              >
+                <Icon className="h-4 w-4 mr-3" />
+                {label}
+              </Button>
+            ))}
           </nav>
         </aside>
 
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-3 sm:p-6 min-w-0">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Welcome back, {user?.name || 'Provider'}!</h2>
-                    <p className="text-gray-500">Here's an overview of your tourism business performance.</p>
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Welcome back, {user?.name || 'Provider'}!</h2>
+                    <p className="text-gray-500 text-sm">Here's an overview of your tourism business performance.</p>
                   </div>
-                  <Button className="bg-gradient-to-r from-green-600 to-blue-600 pointer-events-auto cursor-pointer" onClick={handleAddHotel}>
+                  <Button className="bg-gradient-to-r from-green-600 to-blue-600 pointer-events-auto cursor-pointer w-full sm:w-auto" onClick={handleAddHotel}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Property
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
                   {statCards.map((stat, index) => (
                     <Card key={index} className={`${stat.bgColor} ${stat.borderColor} border-2`}>
-                      <CardContent className="p-6">
+                      <CardContent className="p-3 sm:p-6">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                            <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
-                            <div className="flex items-center mt-2">
-                              <span className="text-sm font-medium text-green-600">
-                                {stat.change}
-                              </span>
-                              <span className="text-sm text-gray-500 ml-2">vs last month</span>
+                            <p className="text-xs sm:text-sm font-medium text-gray-600">{stat.title}</p>
+                            <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-0.5">{stat.value}</p>
+                            <div className="flex items-center mt-1">
+                              <span className="text-xs sm:text-sm font-medium text-green-600">{stat.change}</span>
+                              <span className="text-xs text-gray-500 ml-1 hidden sm:inline">vs last month</span>
                             </div>
                           </div>
-                          <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
-                            <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
+                          <div className={`w-9 h-9 sm:w-12 sm:h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
+                            <stat.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${stat.iconColor}`} />
                           </div>
                         </div>
                       </CardContent>
@@ -521,22 +619,29 @@ const ProviderDashboard = ({ onNavigate }) => {
                   <CardContent>
                     <div className="space-y-4">
                       {filteredBookings.slice(0, 5).map((booking) => (
-                        <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <Users className="h-5 w-5 text-blue-600" />
+                        <div key={booking.id} className="flex items-start sm:items-center justify-between p-3 sm:p-4 border rounded-lg gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <Users className="h-4 w-4 text-blue-600" />
                             </div>
-                            <div>
-                              <p className="font-medium text-gray-900">Booking #{booking.id}</p>
-                              <p className="text-sm text-gray-500">{booking.start_date}</p>
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-900 text-sm">Booking #{booking.id}</p>
+                              {booking.user && (
+                                <p className="text-xs text-gray-700 font-medium truncate">
+                                  {booking.user.first_name || booking.user.last_name
+                                    ? `${booking.user.first_name} ${booking.user.last_name}`.trim()
+                                    : booking.user.username}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-500">{booking.start_date}</p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium text-gray-900">Rs. {booking.total_price}</p>
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-medium text-gray-900 text-sm">Rs. {Number(booking.total_price).toLocaleString('en-IN')}</p>
                             <Badge className={
-                              booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                              booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-gray-100 text-gray-800'
+                              booking.status === 'confirmed' ? 'bg-green-100 text-green-800 text-xs' :
+                              booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800 text-xs' :
+                              'bg-gray-100 text-gray-800 text-xs'
                             }>
                               {booking.status}
                             </Badge>
@@ -580,66 +685,96 @@ const ProviderDashboard = ({ onNavigate }) => {
                       <p className="text-gray-500">No properties found. Add your first property to get started!</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {filteredHotels.map((hotel) => (
-                        <Card key={hotel.id} className="hover:shadow-lg transition-shadow">
-                          <CardHeader>
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-lg">{hotel.name}</CardTitle>
-                              <Badge
-                                className={
-                                  isMyHotel(hotel)
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-slate-100 text-slate-700'
-                                }
-                              >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredHotels.map((hotel) => {
+                        const destInfo = destinations.find(d => d.id === (hotel.destination_id ?? hotel.destination));
+                        const roomCount = Array.isArray(hotel.rooms) ? hotel.rooms.length : hotel.total_rooms || 0;
+                        return (
+                        <Card key={hotel.id} className="hover:shadow-lg transition-shadow overflow-hidden flex flex-col">
+                          {/* Hotel image */}
+                          <div className="relative h-44 flex-shrink-0 overflow-hidden bg-slate-100">
+                            <img
+                              src={hotel.image || DEFAULT_HOTEL_IMAGE}
+                              alt={hotel.name}
+                              className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                              onError={e => { e.currentTarget.src = DEFAULT_HOTEL_IMAGE; }}
+                            />
+                            <div className="absolute top-2 right-2 flex gap-1">
+                              <Badge className={isMyHotel(hotel) ? 'bg-green-600 text-white shadow' : 'bg-slate-800/80 text-white shadow'}>
                                 {isMyHotel(hotel) ? 'Your listing' : 'Site listing'}
                               </Badge>
                             </div>
                             {isMyHotel(hotel) && (
-                              <div className="flex space-x-2">
-                                <Button variant="ghost" size="sm" onClick={() => handleEditHotel(hotel)}>
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteHotel(hotel.id)}
-                                  className="text-red-600 hover:text-red-800"
+                              <div className="absolute top-2 left-2 flex gap-1">
+                                <button
+                                  onClick={() => handleEditHotel(hotel)}
+                                  className="w-7 h-7 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Edit className="h-3.5 w-3.5 text-gray-700" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteHotel(hotel.id)}
+                                  className="w-7 h-7 rounded-full bg-white/90 hover:bg-red-50 flex items-center justify-center shadow"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <CardContent className="p-4 flex-1 flex flex-col gap-2">
+                            <div>
+                              <h3 className="font-bold text-gray-900 text-base leading-tight">{hotel.name}</h3>
+                              {destInfo && (
+                                <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                                  <MapPin className="h-3 w-3 flex-shrink-0" />
+                                  {destInfo.name}
+                                </div>
+                              )}
+                              {hotel.address && !destInfo && (
+                                <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                                  <MapPin className="h-3 w-3 flex-shrink-0" />
+                                  {hotel.address}
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 line-clamp-2 flex-1">{hotel.description}</p>
+                            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                              <div>
+                                <span className="font-bold text-green-600 text-base">Rs. {Number(hotel.price_per_night).toLocaleString('en-IN')}</span>
+                                <span className="text-xs text-gray-400">/night</span>
+                              </div>
+                              <span className="text-xs text-slate-500">{roomCount} room type{roomCount !== 1 ? 's' : ''}</span>
+                            </div>
+                            {hotel.amenities && (
+                              <div className="flex flex-wrap gap-1">
+                                {(Array.isArray(hotel.amenities) ? hotel.amenities : String(hotel.amenities).split(','))
+                                  .slice(0, 3)
+                                  .map((a, i) => (
+                                    <span key={i} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{String(a).trim()}</span>
+                                  ))}
+                              </div>
+                            )}
+                            {isMyHotel(hotel) && (
+                              <div className="flex gap-2 mt-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 text-xs"
+                                  onClick={() => setSelectedHotelForRooms(hotel)}
+                                >
+                                  Manage Rooms
                                 </Button>
                               </div>
                             )}
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2">
-                              <p className="text-sm text-gray-600">{hotel.description}</p>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-500">{hotel.address}</span>
-                                <span className="font-semibold text-green-600">Rs. {hotel.price_per_night}/night</span>
-                              </div>
-                              <div className="flex items-center justify-between text-sm text-slate-500">
-                                <span>{Array.isArray(hotel.rooms) ? hotel.rooms.length : hotel.total_rooms || 0} room option(s)</span>
-                                {isMyHotel(hotel) && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setSelectedHotelForRooms(hotel)}
-                                  >
-                                    Manage Rooms
-                                  </Button>
-                                )}
-                              </div>
-                              {isMyHotel(hotel) && Array.isArray(hotel.rooms) && hotel.rooms.length === 0 && (
-                                <p className="text-xs text-amber-700">
-                                  No rooms added yet. Add at least one room so travelers can book this property.
-                                </p>
-                              )}
-                            </div>
+                            {isMyHotel(hotel) && roomCount === 0 && (
+                              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">
+                                Add rooms so travelers can book this property.
+                              </p>
+                            )}
                           </CardContent>
                         </Card>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -665,48 +800,61 @@ const ProviderDashboard = ({ onNavigate }) => {
                       <p className="text-gray-500">No bookings found.</p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {filteredBookings.map((booking) => (
-                        <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <Users className="h-5 w-5 text-blue-600" />
+                        <div key={booking.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border rounded-lg gap-3">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <Users className="h-4 w-4 text-blue-600" />
                             </div>
-                            <div>
-                              <p className="font-medium text-gray-900">Booking #{booking.id}</p>
-                              <p className="text-sm text-gray-500">{booking.start_date}</p>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-gray-900 text-sm">Booking #{booking.id}</p>
+                              {booking.user && (
+                                <p className="text-sm font-semibold text-gray-800">
+                                  {booking.user.first_name || booking.user.last_name
+                                    ? `${booking.user.first_name} ${booking.user.last_name}`.trim()
+                                    : booking.user.username}
+                                </p>
+                              )}
+                              {booking.user?.email && (
+                                <p className="text-xs text-blue-600 truncate">{booking.user.email}</p>
+                              )}
+                              {booking.user?.phone && (
+                                <p className="text-xs text-gray-500">📞 {booking.user.phone}</p>
+                              )}
+                              <p className="text-xs text-gray-500 mt-0.5">{booking.start_date}{booking.end_date ? ` → ${booking.end_date}` : ''}</p>
                               {booking.room_details?.room_type && (
-                                <p className="text-sm text-gray-600">Room: {booking.room_details.room_type}</p>
+                                <p className="text-xs text-gray-600">Room: {booking.room_details.room_type}</p>
                               )}
                               {booking.package_details?.name && (
-                                <p className="text-sm text-gray-600">Package: {booking.package_details.name}</p>
+                                <p className="text-xs text-gray-600">Package: {booking.package_details.name}</p>
                               )}
                             </div>
                           </div>
-                          <div className="text-right space-y-2">
-                            <p className="font-medium text-gray-900">Rs. {booking.total_price}</p>
+                          <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 flex-shrink-0">
+                            <p className="font-semibold text-gray-900 text-sm">Rs. {Number(booking.total_price).toLocaleString('en-IN')}</p>
                             <Badge className={
-                              booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                              booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-gray-100 text-gray-800'
+                              booking.status === 'confirmed' ? 'bg-green-100 text-green-800 text-xs' :
+                              booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800 text-xs' :
+                              'bg-gray-100 text-gray-800 text-xs'
                             }>
                               {booking.status}
                             </Badge>
-                            <div className="flex space-x-2 mt-2">
+                            <div className="flex gap-2">
                               {booking.status === 'pending' && (
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   onClick={() => handleBookingAction('confirm', booking)}
-                                  className="bg-green-600 hover:bg-green-700"
+                                  className="bg-green-600 hover:bg-green-700 h-7 text-xs"
                                 >
                                   Confirm
                                 </Button>
                               )}
-                              <Button 
-                                variant="outline" 
+                              <Button
+                                variant="outline"
                                 size="sm"
                                 onClick={() => handleBookingAction('cancel', booking)}
-                                className="text-red-600 hover:text-red-800"
+                                className="text-red-600 hover:text-red-800 h-7 text-xs"
                               >
                                 Cancel
                               </Button>
@@ -720,34 +868,135 @@ const ProviderDashboard = ({ onNavigate }) => {
               </Card>
             )}
 
-            {activeTab === 'earnings' && (
+            {activeTab === 'earnings' && (() => {
+              const maxRevenue = Math.max(...monthlyEarnings.map(m => m.revenue), 1);
+              const currentMonth = monthlyEarnings[monthlyEarnings.length - 1];
+              const prevMonth = monthlyEarnings[monthlyEarnings.length - 2];
+              const growth = prevMonth?.revenue > 0
+                ? (((currentMonth?.revenue || 0) - prevMonth.revenue) / prevMonth.revenue * 100).toFixed(1)
+                : null;
+              const total = bookingStatusCounts.confirmed + bookingStatusCounts.pending + bookingStatusCounts.cancelled + bookingStatusCounts.completed;
+              const statusColors = { confirmed: '#16a34a', pending: '#ca8a04', cancelled: '#dc2626', completed: '#2563eb' };
+              return (
               <div className="space-y-6">
+                {/* KPI cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-xl p-5">
+                    <p className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-1">Total Revenue</p>
+                    <p className="text-3xl font-bold text-green-700">Rs. {formatRs(stats.totalRevenue)}</p>
+                    {growth !== null && (
+                      <p className={`text-xs mt-1 font-medium flex items-center gap-1 ${Number(growth) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                        <TrendingUp className="h-3 w-3" />
+                        {Number(growth) >= 0 ? '+' : ''}{growth}% vs last month
+                      </p>
+                    )}
+                  </div>
+                  <div className="bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-100 rounded-xl p-5">
+                    <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">This Month</p>
+                    <p className="text-3xl font-bold text-blue-700">Rs. {formatRs(currentMonth?.revenue || 0)}</p>
+                    <p className="text-xs text-blue-500 mt-1">{currentMonth?.count || 0} booking{currentMonth?.count !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-100 rounded-xl p-5">
+                    <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1">Avg per Booking</p>
+                    <p className="text-3xl font-bold text-purple-700">
+                      Rs. {stats.totalBookings > 0 ? formatRs(stats.totalRevenue / stats.totalBookings) : '0'}
+                    </p>
+                    <p className="text-xs text-purple-500 mt-1">{stats.totalBookings} total bookings</p>
+                  </div>
+                </div>
+
+                {/* Monthly revenue bar chart */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Earnings Overview</CardTitle>
-                    <CardDescription>Your revenue and financial insights</CardDescription>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-green-600" />
+                      Monthly Revenue (last 6 months)
+                    </CardTitle>
+                    <CardDescription>Earnings trend from confirmed bookings</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="p-4 border rounded-lg">
-                        <h4 className="font-semibold mb-2">Total Revenue</h4>
-                        <p className="text-2xl font-bold text-green-600">Rs. {formatRs(stats.totalRevenue)}</p>
-                      </div>
-                      <div className="p-4 border rounded-lg">
-                        <h4 className="font-semibold mb-2">This Month</h4>
-                        <p className="text-2xl font-bold text-blue-600">Rs. {formatRs(stats.totalRevenue * 0.3)}</p>
-                      </div>
-                      <div className="p-4 border rounded-lg">
-                        <h4 className="font-semibold mb-2">Average per Booking</h4>
-                        <p className="text-2xl font-bold text-purple-600">
-                          Rs. {stats.totalBookings > 0 ? formatRs(stats.totalRevenue / stats.totalBookings) : '0'}
-                        </p>
-                      </div>
+                    <div className="flex items-end gap-2 sm:gap-4 h-48 px-2">
+                      {monthlyEarnings.map((m) => {
+                        const heightPct = maxRevenue > 0 ? (m.revenue / maxRevenue) * 100 : 0;
+                        const isCurrentMonth = m === currentMonth;
+                        return (
+                          <div key={m.key} className="flex-1 flex flex-col items-center gap-1 group">
+                            <span className="text-[10px] sm:text-xs text-slate-500 text-center opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                              Rs.{formatRs(m.revenue)}
+                            </span>
+                            <div className="w-full flex items-end" style={{ height: '140px' }}>
+                              <div
+                                className={`w-full rounded-t-md transition-all duration-500 ${isCurrentMonth ? 'bg-green-500' : 'bg-green-200 group-hover:bg-green-400'}`}
+                                style={{ height: `${Math.max(heightPct, m.revenue > 0 ? 4 : 0)}%` }}
+                                title={`${m.month}: Rs. ${formatRs(m.revenue)}`}
+                              />
+                            </div>
+                            <span className="text-[10px] sm:text-xs font-medium text-slate-500">{m.month}</span>
+                            {m.count > 0 && (
+                              <span className="text-[9px] text-slate-400">{m.count} bk</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Booking status distribution */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Booking Status</CardTitle>
+                      <CardDescription>Distribution of all bookings</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {Object.entries(bookingStatusCounts).map(([status, count]) => (
+                          <div key={status} className="flex items-center gap-3">
+                            <span className="w-20 text-xs text-gray-600 capitalize">{status}</span>
+                            <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+                              <div
+                                className="h-2 rounded-full transition-all duration-500"
+                                style={{
+                                  width: total > 0 ? `${(count / total) * 100}%` : '0%',
+                                  backgroundColor: statusColors[status],
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs font-semibold text-gray-700 w-6 text-right">{count}</span>
+                          </div>
+                        ))}
+                        {total === 0 && <p className="text-sm text-gray-400 text-center py-4">No bookings yet</p>}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Revenue by Month</CardTitle>
+                      <CardDescription>Top earning months</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {[...monthlyEarnings].sort((a, b) => b.revenue - a.revenue).slice(0, 4).map((m) => (
+                          <div key={m.key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                            <div>
+                              <span className="text-sm font-medium text-gray-800">{m.month} {m.key.split('-')[0]}</span>
+                              <span className="ml-2 text-xs text-gray-400">{m.count} booking{m.count !== 1 ? 's' : ''}</span>
+                            </div>
+                            <span className="font-bold text-green-600 text-sm">Rs. {formatRs(m.revenue)}</span>
+                          </div>
+                        ))}
+                        {monthlyEarnings.every(m => m.revenue === 0) && (
+                          <p className="text-sm text-gray-400 text-center py-4">No revenue data yet</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
-            )}
+              );
+            })()}
 
             {activeTab === 'reviews' && (
               <Card>
@@ -768,7 +1017,7 @@ const ProviderDashboard = ({ onNavigate }) => {
       </div>
 
       <Dialog open={hotelDialogOpen} onOpenChange={setHotelDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isAddingHotel ? 'Add New Property' : 'Edit Property'}</DialogTitle>
           </DialogHeader>

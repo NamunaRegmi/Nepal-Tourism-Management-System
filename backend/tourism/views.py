@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 import base64
 from datetime import datetime, time, timedelta
@@ -21,11 +22,11 @@ from django.db import IntegrityError, models
 from urllib.parse import urlparse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from .models import User, Destination, Hotel, Room, Booking, Package, TourGuideProfile, GuideBooking
+from .models import User, Destination, Hotel, Room, Booking, Package, TourGuideProfile, GuideBooking, Review
 from .serializers import (
     UserSerializer, DestinationSerializer, HotelSerializer,
     RoomSerializer, BookingSerializer, PackageSerializer,
-    TourGuideProfileSerializer, GuideBookingSerializer,
+    TourGuideProfileSerializer, GuideBookingSerializer, ReviewSerializer,
 )
 from .khalti_integration import KhaltiPaymentGateway
 from .esewa_integration import EsewaPaymentGateway
@@ -34,6 +35,51 @@ from .esewa_integration import EsewaPaymentGateway
 PUBLIC_AUTH_ROLES = {'user', 'provider', 'guide'}
 CANCELLATION_CUTOFF_HOURS = 18
 BOOKING_TIME_ZONE = ZoneInfo('Asia/Kathmandu')
+
+ROLE_DISPLAY = {
+    'user': 'User',
+    'admin': 'Admin',
+    'provider': 'Travel Service Provider',
+    'guide': 'Tour Guide',
+}
+
+
+class CloudinaryImageUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        image = request.FILES.get('image')
+        folder = (request.data.get('folder') or 'nepal-tourism/uploads').strip()
+
+        if not image:
+            return Response({'error': 'Image file is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not image.content_type.startswith('image/'):
+            return Response({'error': 'Upload a valid image file.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            import cloudinary.uploader
+
+            result = cloudinary.uploader.upload(
+                image,
+                folder=folder,
+                resource_type='image',
+                overwrite=False,
+            )
+            secure_url = result.get('secure_url')
+            if not secure_url:
+                return Response(
+                    {'error': 'Cloudinary upload did not return a URL.'},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            return Response({'url': secure_url})
+        except Exception as exc:
+            return Response(
+                {'error': f'Cloudinary upload failed: {exc}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
 
 def build_unique_username(email):
@@ -126,6 +172,20 @@ def parse_esewa_callback_payload(query_params):
     }
 
 
+def get_booking_id_from_esewa_transaction(transaction_uuid):
+    if not transaction_uuid or not transaction_uuid.startswith('BOOK-'):
+        return None
+
+    try:
+        parts = transaction_uuid.split('-')
+        if len(parts) >= 2:
+            return int(parts[1])
+    except (ValueError, IndexError):
+        return None
+
+    return None
+
+
 def get_allowed_frontend_origins():
     origins = set(getattr(settings, 'CORS_ALLOWED_ORIGINS', []))
     frontend_base_url = getattr(settings, 'FRONTEND_BASE_URL', '').rstrip('/')
@@ -178,10 +238,12 @@ class GoogleLoginView(APIView):
             last_name = idinfo.get('family_name', '')
             picture = idinfo.get('picture', '')
 
+            requested_role = (request.data.get('role') or '').strip().lower()
             user = User.objects.filter(email=email).first()
 
             if user is None:
-                selected_role, role_error, role_status = normalize_public_auth_role(request.data.get('role'))
+                # New user — create with the selected role
+                selected_role, role_error, role_status = normalize_public_auth_role(requested_role)
                 if role_error:
                     return Response({'error': role_error}, status=role_status)
 
@@ -194,6 +256,14 @@ class GoogleLoginView(APIView):
                     profile_picture=picture,
                     role=selected_role,
                 )
+            else:
+                # Existing user — verify they are logging in through their assigned role section
+                if requested_role and user.role != requested_role:
+                    requested_label = ROLE_DISPLAY.get(requested_role, requested_role.capitalize())
+                    return Response(
+                        {'error': f'This account is not registered as a {requested_label}.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
 
             if not user.google_id:
                 user.google_id = google_id
@@ -270,36 +340,43 @@ class RegisterView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
-        email = request.data.get('email')
+        identifier = (request.data.get('email') or '').strip()
         password = request.data.get('password')
-        
-        if not email or not password:
+        requested_role = (request.data.get('role') or '').strip().lower()
+
+        if not identifier or not password:
             return Response(
-                {'error': 'Email and password are required'}, 
+                {'error': 'Email/username and password are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Try to get user by email
+
+        # Allow login by email or username (case-insensitive)
+        user = None
         try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
+            user = User.objects.filter(email__iexact=identifier).first()
+            if user is None:
+                user = User.objects.filter(username__iexact=identifier).first()
+        except Exception:
+            user = None
+
+        if not user or not user.check_password(password):
             return Response(
-                {'error': 'Invalid email or password'}, 
+                {'error': 'Invalid email or password'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
-        # Check password
-        if not user.check_password(password):
+
+        # Role validation: the user must log in through their assigned role section
+        if requested_role and user.role != requested_role:
+            requested_label = ROLE_DISPLAY.get(requested_role, requested_role.capitalize())
             return Response(
-                {'error': 'Invalid email or password'}, 
-                status=status.HTTP_401_UNAUTHORIZED
+                {'error': f'This account is not registered as a {requested_label}.'},
+                status=status.HTTP_403_FORBIDDEN
             )
-        
-        # Generate tokens
+
         refresh = RefreshToken.for_user(user)
-        
+
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
@@ -328,7 +405,7 @@ class ForgotPasswordView(APIView):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             
             # Create reset link
-            reset_link = f"http://localhost:5173/reset-password/{uid}/{token}"
+            reset_link = f"{settings.FRONTEND_BASE_URL}/reset-password/{uid}/{token}"
             
             # Send email
             subject = 'Password Reset - Nepal Tourism'
@@ -1278,14 +1355,31 @@ class GuideBookingDetailView(APIView):
 
 class DestinationRecommendationView(APIView):
     """
-    Gemini-powered destination recommendations.
-    Gemini ranks candidates by semantic similarity and writes a reason for each.
-    Falls back to scoring algorithm if Gemini is unavailable.
+    Groq-powered destination recommendations.
+    Groq ranks candidates by semantic similarity and writes a reason for each.
+    Falls back to scoring algorithm if Groq is unavailable.
     """
     permission_classes = [AllowAny]
 
+    def _build_reason(self, dest, user_interests, user_season, source=None):
+        highlights = [h for h in (dest.highlights or []) if h]
+        highlight_text = highlights[0].lower() if highlights else 'its local experiences'
+
+        if user_interests:
+            for interest in user_interests:
+                if interest in f"{dest.name} {' '.join(highlights)} {dest.description}".lower():
+                    return f"Recommended for your {interest} interest, with {highlight_text} around {dest.name}."
+
+        if user_season and user_season in (dest.best_time_to_visit or '').lower():
+            return f"{dest.name} fits your {user_season} travel plan and offers {highlight_text}."
+
+        if source and dest.province == source.province:
+            return f"A nearby pick in {dest.province} with {highlight_text} for a similar Nepal experience."
+
+        return f"Recommended for its {highlight_text} and strong appeal for Nepal travellers."
+
     def _fallback_rank(self, source, candidates, user_interests, user_season):
-        """Simple scoring fallback used when Gemini call fails."""
+        """Simple scoring fallback used when Groq call fails."""
         SEASON_MONTHS = {
             'spring': {'march', 'april', 'may', 'mar', 'apr'},
             'summer': {'june', 'july', 'august', 'jun', 'jul', 'aug'},
@@ -1317,7 +1411,13 @@ class DestinationRecommendationView(APIView):
             scored.append((score, dest))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        return [{'destination': d, 'reason': None} for _, d in scored[:4]]
+        return [
+            {
+                'destination': d,
+                'reason': self._build_reason(d, user_interests, user_season, source),
+            }
+            for _, d in scored[:4]
+        ]
 
     def get(self, request, pk):
         try:
@@ -1343,9 +1443,10 @@ class DestinationRecommendationView(APIView):
         return Response(results)
 
     def _groq_rank(self, source, candidates, user_interests, user_season):
-        import os
-        api_key = os.getenv('GROQ_API_KEY', '')
+        api_key = getattr(settings, 'GROQ_API_KEY', '')
         if not api_key or not candidates:
+            if not api_key:
+                print('Groq recommendation skipped: GROQ_API_KEY is not configured')
             return self._fallback_rank(source, candidates, user_interests, user_season)
 
         try:
@@ -1393,11 +1494,12 @@ Candidates:
 Reply with ONLY a valid JSON array, no markdown fences, no extra text:
 [{{"id": <int>, "reason": "<sentence>"}}, ...]"""
 
-            client = Groq(api_key=api_key)
+            client = Groq(api_key=api_key, timeout=4.0)
             response = client.chat.completions.create(
                 model='llama-3.1-8b-instant',
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.3,
+                max_tokens=350,
             )
 
             raw = (response.choices[0].message.content or '').strip()
@@ -1443,8 +1545,48 @@ class DestinationExploreRecommendationView(APIView):
     """
     permission_classes = [AllowAny]
 
+    def _build_reason(self, dest, user_interests, user_season):
+        highlights = [h for h in (dest.highlights or []) if h]
+        highlight_text = highlights[0].lower() if highlights else 'memorable local experiences'
+
+        if user_interests:
+            haystack = f"{dest.name} {' '.join(highlights)} {dest.description}".lower()
+            for interest in user_interests:
+                if interest in haystack:
+                    return f"Matches your {interest} interest with {highlight_text} in {dest.name}."
+
+        if user_season and user_season in (dest.best_time_to_visit or '').lower():
+            return f"A good {user_season} choice with {highlight_text} and easy trip planning."
+
+        return f"A strong Nepal pick for {highlight_text} and a balanced travel experience."
+
+    def _fallback_rank(self, destinations, user_interests, user_season):
+        return [
+            {
+                'destination': d,
+                'reason': self._build_reason(d, user_interests, user_season),
+            }
+            for d in destinations[:4]
+        ]
+
     def get(self, request):
-        destinations = list(Destination.objects.filter(is_active=True))
+        destinations = list(
+            Destination.objects.filter(is_active=True).only(
+                'id',
+                'name',
+                'province',
+                'description',
+                'image',
+                'image_file',
+                'highlights',
+                'best_time_to_visit',
+                'latitude',
+                'longitude',
+                'is_active',
+                'created_at',
+                'updated_at',
+            )
+        )
         if not destinations:
             return Response([])
 
@@ -1452,7 +1594,10 @@ class DestinationExploreRecommendationView(APIView):
         user_interests = [i.strip().lower() for i in raw_interests.split(',') if i.strip()]
         user_season = (request.query_params.get('season') or '').strip().lower()
 
-        ranked = self._groq_rank(destinations, user_interests, user_season)
+        if user_interests or user_season:
+            ranked = self._groq_rank(destinations, user_interests, user_season)
+        else:
+            ranked = self._fallback_rank(destinations, user_interests, user_season)
 
         results = []
         for item in ranked:
@@ -1519,10 +1664,10 @@ class DestinationExploreRecommendationView(APIView):
         return Response(results)
 
     def _groq_rank(self, destinations, user_interests, user_season):
-        import os
-        api_key = os.getenv('GROQ_API_KEY', '')
+        api_key = getattr(settings, 'GROQ_API_KEY', '')
         if not api_key:
-            return [{'destination': d, 'reason': None} for d in destinations[:4]]
+            print('Groq explore recommendation skipped: GROQ_API_KEY is not configured')
+            return self._fallback_rank(destinations, user_interests, user_season)
 
         try:
             from groq import Groq
@@ -1589,11 +1734,12 @@ Destinations:
 Reply with ONLY a valid JSON array, no markdown fences, no extra text:
 [{{"id": <int>, "reason": "<sentence>"}}, ...]"""
 
-            client = Groq(api_key=api_key)
+            client = Groq(api_key=api_key, timeout=4.0)
             response = client.chat.completions.create(
                 model='llama-3.1-8b-instant',
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.4,
+                max_tokens=350,
             )
 
             raw = (response.choices[0].message.content or '').strip()
@@ -1618,7 +1764,10 @@ Reply with ONLY a valid JSON array, no markdown fences, no extra text:
             if len(ranked) < 4:
                 for d in destinations:
                     if d.id not in seen:
-                        ranked.append({'destination': d, 'reason': None})
+                        ranked.append({
+                            'destination': d,
+                            'reason': self._build_reason(d, user_interests, user_season),
+                        })
                     if len(ranked) == 4:
                         break
 
@@ -1626,7 +1775,7 @@ Reply with ONLY a valid JSON array, no markdown fences, no extra text:
 
         except Exception as e:
             print(f'Groq explore recommendation error: {e}')
-            return [{'destination': d, 'reason': None} for d in destinations[:4]]
+            return self._fallback_rank(destinations, user_interests, user_season)
 
 
 class KhaltiVerifyView(APIView):
@@ -1948,18 +2097,19 @@ class EsewaPaymentVerifyView(APIView):
                 return Response(verification_response, status=status.HTTP_400_BAD_REQUEST)
             
             # Extract booking_id from transaction_uuid (format: BOOK-{id}-{timestamp})
-            booking_id = None
-            if transaction_uuid and transaction_uuid.startswith('BOOK-'):
-                try:
-                    parts = transaction_uuid.split('-')
-                    if len(parts) >= 2:
-                        booking_id = int(parts[1])
-                except (ValueError, IndexError):
-                    pass
+            booking_id = get_booking_id_from_esewa_transaction(transaction_uuid)
             
             if booking_id:
                 try:
                     booking = Booking.objects.get(id=booking_id, user=request.user)
+                    if booking.payment_status == 'paid':
+                        return Response({
+                            'success': True,
+                            'message': 'Payment already verified and booking confirmed',
+                            'booking_id': booking.id,
+                            'payment_details': verification_response
+                        })
+
                     booking.payment_status = 'paid'
                     booking.payment_method = 'esewa'
                     booking.status = 'confirmed'
@@ -2019,26 +2169,39 @@ class EsewaPaymentCallbackView(APIView):
             
             if not transaction_uuid or not total_amount:
                 failure_query = redirect_params.copy()
-                failure_query['error'] = 'Invalid callback parameters'
+                failure_query['error'] = (
+                    'Payment was cancelled or not completed.'
+                    if 'failure' in failure_redirect_path
+                    else 'Invalid callback parameters'
+                )
                 return HttpResponseRedirect(
                     f"{redirect_origin}{failure_redirect_path}?{failure_query.urlencode()}"
                 )
+
+            booking_id = get_booking_id_from_esewa_transaction(transaction_uuid)
+
+            if booking_id:
+                try:
+                    existing_booking = Booking.objects.get(id=booking_id)
+                    if existing_booking.payment_status == 'paid':
+                        success_query = redirect_params.copy()
+                        success_query['booking_id'] = existing_booking.id
+                        success_query['verified'] = '1'
+                        return HttpResponseRedirect(
+                            f"{redirect_origin}{success_redirect_path}?{success_query.urlencode()}"
+                        )
+                except Booking.DoesNotExist:
+                    failure_query = redirect_params.copy()
+                    failure_query['error'] = 'Booking not found'
+                    return HttpResponseRedirect(
+                        f"{redirect_origin}{failure_redirect_path}?{failure_query.urlencode()}"
+                    )
             
             # Verify payment with eSewa
             esewa = EsewaPaymentGateway()
             verification_response = esewa.verify_payment(transaction_uuid, total_amount, product_code)
             
             if verification_response.get('success'):
-                # Extract booking_id from transaction_uuid
-                booking_id = None
-                if transaction_uuid.startswith('BOOK-'):
-                    try:
-                        parts = transaction_uuid.split('-')
-                        if len(parts) >= 2:
-                            booking_id = int(parts[1])
-                    except (ValueError, IndexError):
-                        pass
-                
                 if booking_id:
                     try:
                         booking = Booking.objects.get(id=booking_id)
@@ -2049,6 +2212,7 @@ class EsewaPaymentCallbackView(APIView):
 
                         success_query = redirect_params.copy()
                         success_query['booking_id'] = booking.id
+                        success_query['verified'] = '1'
                         return HttpResponseRedirect(
                             f"{redirect_origin}{success_redirect_path}?{success_query.urlencode()}"
                         )
@@ -2108,6 +2272,60 @@ Key knowledge areas:
 - Adventure: paragliding in Pokhara, rafting, bungee jumping, mountain flights, wildlife safaris
 
 Do NOT answer questions unrelated to Nepal tourism or travel. Politely redirect if asked about unrelated topics."""
+
+
+class HotelReviewListView(APIView):
+    """GET all reviews for a hotel, POST a new review (authenticated users only)."""
+    permission_classes = [AllowAny]
+
+    def get(self, request, hotel_id):
+        reviews = Review.objects.filter(hotel_id=hotel_id).select_related('user')
+        serializer = ReviewSerializer(reviews, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, hotel_id):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Login required to submit a review.'}, status=status.HTTP_401_UNAUTHORIZED)
+        if request.user.role != 'user':
+            return Response({'error': 'Only travelers can submit reviews.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            hotel = Hotel.objects.get(pk=hotel_id, is_active=True)
+        except Hotel.DoesNotExist:
+            return Response({'error': 'Hotel not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = {**request.data, 'hotel': hotel.id, 'destination': None}
+        serializer = ReviewSerializer(data=data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DestinationReviewListView(APIView):
+    """GET all reviews for a destination, POST a new review (authenticated users only)."""
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        reviews = Review.objects.filter(destination_id=pk).select_related('user')
+        serializer = ReviewSerializer(reviews, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, pk):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Login required to submit a review.'}, status=status.HTTP_401_UNAUTHORIZED)
+        if request.user.role != 'user':
+            return Response({'error': 'Only travelers can submit reviews.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            destination = Destination.objects.get(pk=pk, is_active=True)
+        except Destination.DoesNotExist:
+            return Response({'error': 'Destination not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = {**request.data, 'destination': destination.id, 'hotel': None}
+        serializer = ReviewSerializer(data=data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ChatView(APIView):

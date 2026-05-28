@@ -1,11 +1,12 @@
-
 from unittest.mock import patch
+import time
+
 
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from .models import Booking, User
-from .esewa_integration import EsewaPaymentGateway
+from ..models import Booking, User
+from ..esewa_integration import EsewaPaymentGateway
 
 
 class AuthenticationTests(TestCase):
@@ -149,6 +150,7 @@ class EsewaRoutingTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn('http://127.0.0.1:5173/payment/esewa/success', response['Location'])
         self.assertIn(f'booking_id={booking.id}', response['Location'])
+        self.assertIn('verified=1', response['Location'])
 
         booking.refresh_from_db()
         self.assertEqual(booking.payment_status, 'paid')
@@ -167,7 +169,37 @@ class EsewaRoutingTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn('http://127.0.0.1:5173/payment/esewa/failure', response['Location'])
-        self.assertIn('error=Invalid+callback+parameters', response['Location'])
+        self.assertIn('error=Payment+was+cancelled+or+not+completed.', response['Location'])
+        mock_verify_payment.assert_not_called()
+
+    @patch('tourism.views.EsewaPaymentGateway.verify_payment')
+    def test_callback_duplicate_success_for_paid_booking_does_not_verify_again(self, mock_verify_payment):
+        booking = Booking.objects.create(
+            user=self.user,
+            start_date='2026-04-22',
+            end_date='2026-04-23',
+            total_price='1500.00',
+            payment_status='paid',
+            payment_method='esewa',
+            status='confirmed',
+        )
+        transaction_uuid = f'BOOK-{booking.id}-20260422010101'
+
+        response = self.client.get(
+            '/api/payment/esewa/callback/',
+            {
+                'redirect_origin': 'http://127.0.0.1:5173',
+                'redirect_path': '/payment/esewa/success',
+                'transaction_uuid': transaction_uuid,
+                'total_amount': '1500.0',
+                'product_code': 'EPAYTEST',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('http://127.0.0.1:5173/payment/esewa/success', response['Location'])
+        self.assertIn(f'booking_id={booking.id}', response['Location'])
+        self.assertIn('verified=1', response['Location'])
         mock_verify_payment.assert_not_called()
 
 
@@ -190,6 +222,7 @@ class EsewaGatewayTests(TestCase):
         gateway = EsewaPaymentGateway()
 
         first = gateway.initiate_payment(self.booking)
+        time.sleep(0.05)
         second = gateway.initiate_payment(self.booking)
 
         self.assertNotEqual(first['transaction_uuid'], second['transaction_uuid'])

@@ -9,28 +9,25 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-from dotenv import load_dotenv
-load_dotenv()
-
 import os
 from pathlib import Path
-
-from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-k2wmqpv&7&wu0w@^wjd*38ckrs5p$v)we4e5vrozgjf3rr+hpc'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-k2wmqpv&7&wu0w@^wjd*38ckrs5p$v)we4e5vrozgjf3rr+hpc')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
 
 
 # Application definition
@@ -92,6 +89,33 @@ DATABASES = {
     }
 }
 
+database_url = os.getenv('DATABASE_URL', '').strip()
+if database_url:
+    parsed_db = urlparse(database_url)
+    DATABASES['default'].update({
+        'NAME': parsed_db.path.lstrip('/'),
+        'USER': parsed_db.username or '',
+        'PASSWORD': parsed_db.password or '',
+        'HOST': parsed_db.hostname or '',
+        'PORT': str(parsed_db.port or 5432),
+    })
+
+    query_options = parse_qs(parsed_db.query)
+    db_options = {}
+    if query_options.get('sslmode'):
+        db_options['sslmode'] = query_options['sslmode'][0]
+    # channel_binding=require is incompatible with NeonDB's PgBouncer pooler (transaction mode)
+    if db_options:
+        DATABASES['default']['OPTIONS'] = db_options
+
+if os.getenv('DB_SSL', '').lower() in {'1', 'true', 'yes', 'required', 'require'}:
+    DATABASES['default'].setdefault('OPTIONS', {})
+    DATABASES['default']['OPTIONS'].setdefault('sslmode', 'require')
+    DATABASES['default']['OPTIONS']['connect_timeout'] = 10
+
+DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+DATABASES['default']['CONN_MAX_AGE'] = 0  # Required for NeonDB serverless / PgBouncer pooler
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -128,6 +152,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Cloudinary
 import cloudinary
@@ -136,7 +161,21 @@ CLOUDINARY_STORAGE = {
     'API_KEY': os.getenv('CLOUDINARY_API_KEY'),
     'API_SECRET': os.getenv('CLOUDINARY_API_SECRET'),
 }
+cloudinary.config(
+    cloud_name=CLOUDINARY_STORAGE['CLOUD_NAME'],
+    api_key=CLOUDINARY_STORAGE['API_KEY'],
+    api_secret=CLOUDINARY_STORAGE['API_SECRET'],
+    secure=True,
+)
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+STORAGES = {
+    'default': {
+        'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
 MEDIA_URL = '/media/'
 
 # Default primary key field type
@@ -148,12 +187,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:5174",
-    "http://localhost:5175",  # Add this line
+    "http://localhost:5175",
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
-    "http://127.0.0.1:5175",  # Add this line
+    "http://127.0.0.1:5175",
 ]
+_frontend_url = os.getenv('FRONTEND_BASE_URL', '').rstrip('/')
+if _frontend_url and _frontend_url not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(_frontend_url)
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     'accept',
@@ -190,14 +232,9 @@ SIMPLE_JWT = {
 }
 
 # Google OAuth
-import os
-from pathlib import Path
-
-# At the top, add these imports if not already there
-
-# Then replace the Google OAuth settings with:
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
+GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
 
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

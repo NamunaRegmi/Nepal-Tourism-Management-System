@@ -48,7 +48,7 @@ export function useAppDataSync(refetch) {
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
-        refetchRef.current?.();
+        schedule();
       }
     };
 

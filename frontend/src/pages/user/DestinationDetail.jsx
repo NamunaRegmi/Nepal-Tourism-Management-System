@@ -3,14 +3,15 @@ import 'leaflet/dist/leaflet.css';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { destinationService, hotelService, packageService } from '@/services/api';
+import { destinationService, hotelService, packageService, reviewService } from '@/services/api';
 import BookingModal from '@/components/BookingModal';
 import { useAppDataSync, notifyAppDataChanged } from '@/lib/dataSync';
 import {
   Star, MapPin, Calendar, CheckCircle, Cloud, Wind, Thermometer,
   ArrowLeft, CloudSun, Map as MapIcon, Info, Sparkles, SlidersHorizontal,
-  Package, Users, Clock, ChevronRight, Hotel, TrendingUp
+  Package, Users, Clock, ChevronRight, Hotel, TrendingUp, MessageSquare, Send
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -102,13 +103,8 @@ const DESTINATION_IMAGES = {
 };
 
 const getDestinationImage = (dest) => {
-  if (!dest) return 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=1200&q=80';
-  const lower = (dest?.name || '').toLowerCase();
-  const sorted = Object.keys(DESTINATION_IMAGES).sort((a, b) => b.length - a.length);
-  for (const key of sorted) {
-    if (lower.includes(key)) return DESTINATION_IMAGES[key];
-  }
-  return dest?.image_url || dest?.image || 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=1200&q=80';
+  if (!dest) return '/assets/nepal-tourism-mark.svg';
+  return dest?.image_url || dest?.image || '/assets/nepal-tourism-mark.svg';
 };
 
 const INTEREST_OPTIONS = [
@@ -149,6 +145,11 @@ function DestinationDetail({ destinationId, onNavigate, onSelectDestination }) {
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [destReviews, setDestReviews] = useState([]);
+  const [reviewForm, setReviewForm] = useState({ rating: 0, title: '', comment: '' });
+  const [reviewHover, setReviewHover] = useState(0);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const storedUser = (() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } })();
 
   const isAuthenticated = () => !!localStorage.getItem('user') && !!localStorage.getItem('access_token');
 
@@ -164,14 +165,16 @@ function DestinationDetail({ destinationId, onNavigate, onSelectDestination }) {
     try {
       setLoading(true);
       setError(null);
-      const [destRes, hotelsRes, pkgsRes] = await Promise.all([
+      const [destRes, hotelsRes, pkgsRes, reviewsRes] = await Promise.all([
         destinationService.getById(destinationId),
         hotelService.getByDestination(destinationId),
         packageService.getByDestination(destinationId),
+        reviewService.getDestinationReviews(destinationId),
       ]);
       setDestination(destRes.data);
       setHotels(hotelsRes.data);
       setPackages(pkgsRes.data);
+      setDestReviews(reviewsRes.data || []);
     } catch (err) {
       setError(
         err?.code === 'ECONNABORTED'
@@ -236,10 +239,38 @@ function DestinationDetail({ destinationId, onNavigate, onSelectDestination }) {
     </div>
   );
 
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!storedUser) return toast.error('Please log in to submit a review.');
+    if (storedUser.role !== 'user') return toast.error('Only travelers can submit reviews.');
+    if (!reviewForm.rating) return toast.error('Please select a star rating.');
+    if (!reviewForm.comment.trim()) return toast.error('Please write a comment.');
+    try {
+      setSubmittingReview(true);
+      const res = await reviewService.createDestinationReview(destinationId, {
+        rating: reviewForm.rating,
+        title: reviewForm.title.trim(),
+        comment: reviewForm.comment.trim(),
+      });
+      setDestReviews(prev => [res.data, ...prev]);
+      setReviewForm({ rating: 0, title: '', comment: '' });
+      toast.success('Review submitted. Thank you!');
+    } catch (err) {
+      toast.error(err.response?.data?.non_field_errors?.[0] || err.response?.data?.error || 'Could not submit review.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const avgDestRating = destReviews.length
+    ? (destReviews.reduce((s, r) => s + r.rating, 0) / destReviews.length).toFixed(1)
+    : null;
+
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'hotels', label: `Hotels (${hotels.length})` },
     { id: 'packages', label: `Packages (${packages.length})` },
+    { id: 'reviews', label: `Reviews (${destReviews.length})` },
   ];
 
   return (
@@ -456,7 +487,7 @@ function DestinationDetail({ destinationId, onNavigate, onSelectDestination }) {
                       <div key={hotel.id} className="flex flex-col md:flex-row gap-5 p-5 rounded-2xl border border-gray-100 hover:border-blue-200 transition-colors hover:shadow-md group">
                         <div className="w-full md:w-56 h-44 rounded-xl overflow-hidden flex-shrink-0">
                           <img
-                            src={hotel.image || 'https://via.placeholder.com/400x300'}
+                            src={hotel.image_url || hotel.image || 'https://via.placeholder.com/400x300'}
                             alt={hotel.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
@@ -578,6 +609,131 @@ function DestinationDetail({ destinationId, onNavigate, onSelectDestination }) {
                               Book Package
                             </Button>
                           </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Reviews Tab */}
+            {activeTab === 'reviews' && (
+              <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-8">
+
+                {/* Summary */}
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <p className="text-5xl font-extrabold text-gray-900">{avgDestRating ?? '—'}</p>
+                    <div className="flex justify-center gap-0.5 mt-1">
+                      {[1,2,3,4,5].map(s => (
+                        <Star key={s} className={`h-4 w-4 ${s <= Math.round(avgDestRating) ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">{destReviews.length} review{destReviews.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    {[5,4,3,2,1].map(s => {
+                      const count = destReviews.filter(r => r.rating === s).length;
+                      const pct = destReviews.length ? Math.round((count / destReviews.length) * 100) : 0;
+                      return (
+                        <div key={s} className="flex items-center gap-2 text-sm">
+                          <span className="w-3 text-gray-500">{s}</span>
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400 flex-shrink-0" />
+                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-amber-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="w-6 text-right text-gray-400 text-xs">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Submit form (users only) */}
+                {storedUser?.role === 'user' && (
+                  <div className="border border-dashed border-gray-200 rounded-xl p-5 bg-gray-50">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-blue-600" /> Write a Review
+                    </h3>
+                    <form onSubmit={handleSubmitReview} className="space-y-4">
+                      {/* Star picker */}
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-1.5">Your Rating</p>
+                        <div className="flex gap-1">
+                          {[1,2,3,4,5].map(s => (
+                            <Star
+                              key={s}
+                              className={`h-7 w-7 cursor-pointer transition-colors ${s <= (reviewHover || reviewForm.rating) ? 'fill-amber-400 text-amber-400' : 'text-gray-300 hover:text-amber-300'}`}
+                              onMouseEnter={() => setReviewHover(s)}
+                              onMouseLeave={() => setReviewHover(0)}
+                              onClick={() => setReviewForm(f => ({ ...f, rating: s }))}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Review title (optional)"
+                          value={reviewForm.title}
+                          onChange={e => setReviewForm(f => ({ ...f, title: e.target.value }))}
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300"
+                          maxLength={200}
+                        />
+                      </div>
+                      <div>
+                        <textarea
+                          placeholder="Share your experience at this destination..."
+                          value={reviewForm.comment}
+                          onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
+                          rows={3}
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                          required
+                        />
+                      </div>
+                      <Button type="submit" disabled={submittingReview} className="bg-blue-600 hover:bg-blue-700 flex items-center gap-2">
+                        <Send className="h-4 w-4" />
+                        {submittingReview ? 'Submitting…' : 'Submit Review'}
+                      </Button>
+                    </form>
+                  </div>
+                )}
+
+                {!storedUser && (
+                  <div className="text-center py-4 bg-blue-50 rounded-xl border border-blue-100">
+                    <p className="text-sm text-blue-700">
+                      <button onClick={() => onNavigate('auth')} className="font-semibold underline">Log in</button>
+                      {' '}to leave a review for this destination.
+                    </p>
+                  </div>
+                )}
+
+                {/* Review list */}
+                {destReviews.length === 0 ? (
+                  <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                    <MessageSquare className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No reviews yet. Be the first to share your experience!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {destReviews.map(review => (
+                      <div key={review.id} className="flex gap-4 p-4 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                          {review.user_initial}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-semibold text-gray-900 text-sm">{review.username}</p>
+                            <span className="text-xs text-gray-400 flex-shrink-0">{new Date(review.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          </div>
+                          <div className="flex gap-0.5 mt-0.5">
+                            {[1,2,3,4,5].map(s => (
+                              <Star key={s} className={`h-3.5 w-3.5 ${s <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />
+                            ))}
+                          </div>
+                          {review.title && <p className="text-sm font-medium text-gray-800 mt-1">{review.title}</p>}
+                          <p className="text-sm text-gray-600 mt-1 leading-relaxed">{review.comment}</p>
                         </div>
                       </div>
                     ))}

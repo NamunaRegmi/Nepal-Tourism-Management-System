@@ -219,6 +219,32 @@ class TourGuideProfile(models.Model):
         return f"Guide: {self.user.get_full_name() or self.user.username}"
 
 
+class Review(models.Model):
+    """User review for a hotel or destination."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
+    hotel = models.ForeignKey(Hotel, on_delete=models.CASCADE, related_name='reviews', null=True, blank=True)
+    destination = models.ForeignKey(Destination, on_delete=models.CASCADE, related_name='reviews', null=True, blank=True)
+    rating = models.PositiveSmallIntegerField()  # 1–5
+    title = models.CharField(max_length=200, blank=True)
+    comment = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Keep hotel.rating in sync with average of its reviews
+        if self.hotel:
+            from django.db.models import Avg
+            avg = Review.objects.filter(hotel=self.hotel).aggregate(a=Avg('rating'))['a']
+            Hotel.objects.filter(pk=self.hotel_id).update(rating=round(avg, 1) if avg else 0)
+
+    def __str__(self):
+        target = self.hotel or self.destination
+        return f"{self.user.username} → {target} ({self.rating}★)"
+
+
 class GuideBooking(models.Model):
     """Customer books a tour guide for a date range."""
     STATUS_CHOICES = Booking.STATUS_CHOICES

@@ -12,6 +12,14 @@ db.*.sqlite3
 # Media uploads (local image storage)
 media/
 
+# Static files collected for deployment
+staticfiles/
+
+# Test output
+htmlcov/
+.coverage
+test_blackbox_output.txt
+
 # Node
 node_modules/
 dist/

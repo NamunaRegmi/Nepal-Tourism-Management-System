@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { notifyAppDataChanged } from '@/lib/dataSync';
 
-const API_URL = 'http://127.0.0.1:8000/api/';
+const API_URL = `${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/`;
 
 const api = axios.create({
     baseURL: API_URL,
@@ -28,6 +28,24 @@ api.interceptors.request.use(
 // Auth endpoints that legitimately require a token — don't retry these without auth
 const AUTH_REQUIRED_PATHS = ['/auth/profile/', '/bookings/', '/guide-bookings/', '/admin/'];
 
+let isRefreshing = false;
+let refreshQueue = [];
+
+function processRefreshQueue(newToken, error) {
+    refreshQueue.forEach(({ resolve, reject }) => {
+        if (error) reject(error);
+        else resolve(newToken);
+    });
+    refreshQueue = [];
+}
+
+function clearSession() {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    notifyAppDataChanged();
+}
+
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
@@ -38,22 +56,48 @@ api.interceptors.response.use(
 
             const url = originalRequest.url || '';
             const needsAuth = AUTH_REQUIRED_PATHS.some((p) => url.includes(p));
+            const refreshToken = localStorage.getItem('refresh_token');
+
+            // Try to refresh the access token if we have a refresh token
+            if (needsAuth && refreshToken) {
+                if (isRefreshing) {
+                    // Another request already refreshing — queue this one
+                    return new Promise((resolve, reject) => {
+                        refreshQueue.push({ resolve, reject });
+                    }).then((newToken) => {
+                        originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                        return api(originalRequest);
+                    });
+                }
+
+                isRefreshing = true;
+                try {
+                    const { data } = await axios.post(`${API_URL}auth/token/refresh/`, {
+                        refresh: refreshToken,
+                    });
+                    const newToken = data.access;
+                    localStorage.setItem('access_token', newToken);
+                    api.defaults.headers['Authorization'] = `Bearer ${newToken}`;
+                    processRefreshQueue(newToken, null);
+                    originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                    return api(originalRequest);
+                } catch {
+                    processRefreshQueue(null, error);
+                    clearSession();
+                } finally {
+                    isRefreshing = false;
+                }
+                return Promise.reject(error);
+            }
 
             if (!needsAuth) {
-                // Public endpoint rejected our expired token — strip auth and retry once
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                localStorage.removeItem('user');
-                notifyAppDataChanged();
+                // Public endpoint — strip auth and retry once
+                clearSession();
                 delete originalRequest.headers['Authorization'];
                 return api(originalRequest);
             }
 
-            // Auth-required endpoint with expired token — clear session
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            localStorage.removeItem('user');
-            notifyAppDataChanged();
+            clearSession();
         }
 
         if (error?.code === 'ECONNABORTED') {
@@ -151,6 +195,13 @@ export const adminService = {
     getAllPackages: () => api.get('admin/packages/'),
     // Same data as BookingListView for admin role (backend returns all bookings)
     getAllBookings: () => api.get('bookings/'),
+};
+
+export const reviewService = {
+    getHotelReviews: (hotelId) => api.get(`hotels/${hotelId}/reviews/`),
+    createHotelReview: (hotelId, data) => api.post(`hotels/${hotelId}/reviews/`, data),
+    getDestinationReviews: (destId) => api.get(`destinations/${destId}/reviews/`),
+    createDestinationReview: (destId, data) => api.post(`destinations/${destId}/reviews/`, data),
 };
 
 export const chatService = {

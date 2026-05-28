@@ -29,7 +29,7 @@ class KhaltiPaymentGateway:
             payload = {
                 "return_url": return_url or self.return_url,
                 "website_url": self.website_url,
-                "amount": int(booking.total_price * 100),  # Convert to paisa
+                "amount": int(float(str(booking.total_price)) * 100),  # Convert to paisa (safe for Decimal)
                 "purchase_order_id": f"BOOK-{booking.id}",
                 "purchase_order_name": f"Hotel Booking - {booking.room.room_type if booking.room else 'Package'}",
                 "customer_info": {

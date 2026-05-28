@@ -296,7 +296,7 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
                                     variant="outline"
                                     className="flex-1 sm:flex-none gap-2"
                                 >
-                                    {loading ? 'Processing...' : 'Reserve Without Payment'}
+                                    {loading ? 'Processing...' : 'Book Without Payment'}
                                 </Button>
                                 <Button 
                                     onClick={() => handleConfirmBooking(false)} 

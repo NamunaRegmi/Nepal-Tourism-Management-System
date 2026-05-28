@@ -1,5 +1,7 @@
 from django.urls import path
 from .views import (
+    HotelReviewListView,
+    DestinationReviewListView,
     GoogleLoginView,
     UserProfileView,
     RegisterView,
@@ -40,6 +42,7 @@ from .views import (
     TourGuideMeProfileView,
     GuideBookingListView,
     GuideBookingDetailView,
+    CloudinaryImageUploadView,
     ChatView,
 )
 
@@ -96,8 +99,15 @@ urlpatterns = [
     path('payment/esewa/verify/', EsewaPaymentVerifyView.as_view(), name='esewa-payment-verify'),
     path('payment/esewa/callback/', EsewaPaymentCallbackView.as_view(), name='esewa-payment-callback'),
     
+    # Reviews
+    path('hotels/<int:hotel_id>/reviews/', HotelReviewListView.as_view(), name='hotel-reviews'),
+    path('destinations/<int:pk>/reviews/', DestinationReviewListView.as_view(), name='destination-reviews'),
+
     # Chatbot
     path('chat/', ChatView.as_view(), name='chat'),
+
+    # Uploads
+    path('uploads/cloudinary-image/', CloudinaryImageUploadView.as_view(), name='cloudinary-image-upload'),
 
     # Admin URLs
     path('admin/stats/', AdminDashboardStatsView.as_view(), name='admin-stats'),

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Destination, Hotel, Room, Booking, Package, TourGuideProfile, GuideBooking
+from .models import User, Destination, Hotel, Room, Booking, Package, TourGuideProfile, GuideBooking, Review
 
 class UserSerializer(serializers.ModelSerializer):
     profile_picture = serializers.CharField(required=False, allow_blank=True)
@@ -234,6 +234,46 @@ class TourGuideProfileSerializer(serializers.ModelSerializer):
         if dests is not None:
             instance.destinations.set(dests)
         return instance
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    user_initial = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Review
+        fields = ['id', 'username', 'user_initial', 'hotel', 'destination', 'rating', 'title', 'comment', 'created_at']
+        read_only_fields = ['id', 'username', 'user_initial', 'created_at']
+
+    def get_user_initial(self, obj):
+        name = (obj.user.get_full_name() or obj.user.username or '?').strip()
+        return name[0].upper()
+
+    def validate_rating(self, value):
+        if not 1 <= value <= 5:
+            raise serializers.ValidationError('Rating must be between 1 and 5.')
+        return value
+
+    def validate(self, attrs):
+        hotel = attrs.get('hotel')
+        destination = attrs.get('destination')
+        if not hotel and not destination:
+            raise serializers.ValidationError('A review must target a hotel or a destination.')
+        if hotel and destination:
+            raise serializers.ValidationError('A review can only target one of hotel or destination.')
+
+        request = self.context.get('request')
+        if request and request.method == 'POST':
+            user = request.user
+            if hotel and Review.objects.filter(user=user, hotel=hotel).exists():
+                raise serializers.ValidationError('You have already reviewed this hotel.')
+            if destination and Review.objects.filter(user=user, destination=destination).exists():
+                raise serializers.ValidationError('You have already reviewed this destination.')
+        return attrs
+
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
 
 
 class GuideBookingSerializer(serializers.ModelSerializer):

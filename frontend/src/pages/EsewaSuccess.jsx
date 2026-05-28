@@ -32,6 +32,23 @@ export default function EsewaSuccess({ onNavigate }) {
         console.log('Full URL:', window.location.href);
         console.log('Search params:', window.location.search);
         console.log('All URL params:', Object.fromEntries(urlParams.entries()));
+
+        const alreadyVerified = urlParams.get('verified') === '1';
+        const bookingId = urlParams.get('booking_id');
+        if (alreadyVerified && bookingId) {
+          localStorage.removeItem('esewa_booking_id');
+          setVerificationResult({
+            success: true,
+            message: 'Payment verified and booking confirmed',
+            booking_id: bookingId,
+            payment_details: {
+              ref_id: urlParams.get('transaction_code'),
+              total_amount: urlParams.get('total_amount')
+            }
+          });
+          setVerifying(false);
+          return;
+        }
         
         // Parse callback parameters
         const callbackData = esewaService.parseCallbackParams(urlParams);

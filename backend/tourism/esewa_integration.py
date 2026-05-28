@@ -48,8 +48,8 @@ class EsewaPaymentGateway:
             # Using the booking creation time causes duplicate UUIDs when users retry payment.
             transaction_uuid = f"BOOK-{booking.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
             
-            # Amount in rupees (eSewa uses NPR)
-            total_amount = str(float(booking.total_price))
+            # Amount in rupees (eSewa uses NPR) — must be integer string, no decimals
+            total_amount = str(int(float(str(booking.total_price))))
             
             # Create message for signature
             # Format: total_amount,transaction_uuid,product_code
