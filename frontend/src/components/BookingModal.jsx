@@ -7,9 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { roomService, bookingService } from '@/services/api';
 import { notifyAppDataChanged } from '@/lib/dataSync';
-import khaltiService from '@/services/khaltiService';
 import esewaService from '@/services/esewaService';
-import { CheckCircle, Calendar, Building2, ArrowRight, ShieldCheck, Smartphone, CreditCard, Wallet } from 'lucide-react';
+import { CheckCircle, Calendar, Building2, ArrowRight, ShieldCheck, Wallet } from 'lucide-react';
 
 const STEPS = { SELECT: 'select', PAYMENT: 'payment', CONFIRM: 'confirm' };
 
@@ -25,7 +24,7 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [bookingId, setBookingId] = useState(null);
-    const [paymentMethod, setPaymentMethod] = useState('khalti');
+    const [paymentMethod, setPaymentMethod] = useState('esewa');
 
     useEffect(() => {
         if (hotel && isOpen && rooms.length === 0 && !roomsLoading) {
@@ -149,32 +148,10 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
         setError('');
 
         try {
-            console.log(`Starting ${paymentMethod} payment process for booking:`, bookingId);
-            
-            if (paymentMethod === 'khalti') {
-                // Initiate Khalti payment
-                const paymentResponse = await khaltiService.initiatePayment(bookingId);
-                
-                console.log('Khalti payment initiation successful:', paymentResponse);
-                
-                if (paymentResponse.payment_url) {
-                    console.log('Redirecting to Khalti payment page:', paymentResponse.payment_url);
-                    window.location.href = paymentResponse.payment_url;
-                    return;
-                } else {
-                    setError('Invalid payment response received.');
-                }
-            } else if (paymentMethod === 'esewa') {
-                // Initiate eSewa payment
-                const successUrl = `${window.location.origin}/payment/esewa/success`;
-                const failureUrl = `${window.location.origin}/payment/esewa/failure`;
-                
-                console.log('Initiating eSewa payment...');
-                await esewaService.processPayment(bookingId, successUrl, failureUrl);
-                
-                // eSewa will redirect to success/failure page
-                // No need to show confirm step here as user will be redirected
-            }
+            localStorage.setItem('esewa_booking_id', bookingId);
+            const successUrl = `${window.location.origin}/payment/esewa/success`;
+            const failureUrl = `${window.location.origin}/payment/esewa/failure`;
+            await esewaService.processPayment(bookingId, successUrl, failureUrl);
         } catch (err) {
             console.error('Payment error:', err);
             
@@ -339,75 +316,30 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
                             </div>
 
                             <div className="space-y-4">
-                                <div>
-                                    <Label className="mb-3 block">Select Payment Method</Label>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => setPaymentMethod('khalti')}
-                                            className={`p-4 border-2 rounded-lg transition-all ${
-                                                paymentMethod === 'khalti'
-                                                    ? 'border-purple-600 bg-purple-50'
-                                                    : 'border-gray-200 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            <div className="flex flex-col items-center gap-2">
-                                                <Smartphone className={`h-8 w-8 ${paymentMethod === 'khalti' ? 'text-purple-600' : 'text-gray-400'}`} />
-                                                <span className={`font-semibold text-sm ${paymentMethod === 'khalti' ? 'text-purple-600' : 'text-gray-600'}`}>
-                                                    Khalti
-                                                </span>
-                                            </div>
-                                        </button>
-                                        
-                                        <button
-                                            type="button"
-                                            onClick={() => setPaymentMethod('esewa')}
-                                            className={`p-4 border-2 rounded-lg transition-all ${
-                                                paymentMethod === 'esewa'
-                                                    ? 'border-green-600 bg-green-50'
-                                                    : 'border-gray-200 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            <div className="flex flex-col items-center gap-2">
-                                                <Wallet className={`h-8 w-8 ${paymentMethod === 'esewa' ? 'text-green-600' : 'text-gray-400'}`} />
-                                                <span className={`font-semibold text-sm ${paymentMethod === 'esewa' ? 'text-green-600' : 'text-gray-600'}`}>
-                                                    eSewa
-                                                </span>
-                                            </div>
-                                        </button>
+                                <div className="p-4 border-2 border-green-600 bg-green-50 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <Wallet className="h-8 w-8 text-green-600" />
+                                        <div>
+                                            <p className="font-semibold text-green-700">eSewa</p>
+                                            <p className="text-xs text-green-600">Digital wallet payment</p>
+                                        </div>
                                     </div>
                                 </div>
-
-                                {paymentMethod === 'khalti' && (
-                                    <div className="text-center">
-                                        <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                            <Smartphone className="h-8 w-8 text-purple-600" />
-                                        </div>
-                                        <h4 className="font-semibold text-gray-900 mb-2">Pay with Khalti</h4>
-                                        <p className="text-sm text-gray-600 mb-4">
-                                            Secure payment via Khalti digital wallet. You'll be redirected to Khalti's secure payment gateway.
-                                        </p>
+                                <div className="text-center">
+                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <Wallet className="h-8 w-8 text-green-600" />
                                     </div>
-                                )}
-
-                                {paymentMethod === 'esewa' && (
-                                    <div className="text-center">
-                                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                            <Wallet className="h-8 w-8 text-green-600" />
-                                        </div>
-                                        <h4 className="font-semibold text-gray-900 mb-2">Pay with eSewa</h4>
-                                        <p className="text-sm text-gray-600 mb-4">
-                                            Secure payment via eSewa digital wallet. You'll be redirected to eSewa's secure payment gateway.
-                                        </p>
-                                    </div>
-                                )}
-
-                                <div className={`${paymentMethod === 'khalti' ? 'bg-purple-50 border-purple-100' : 'bg-green-50 border-green-100'} border rounded-lg p-3`}>
+                                    <h4 className="font-semibold text-gray-900 mb-2">Pay with eSewa</h4>
+                                    <p className="text-sm text-gray-600 mb-4">
+                                        Secure payment via eSewa digital wallet. You'll be redirected to eSewa's secure payment gateway.
+                                    </p>
+                                </div>
+                                <div className="bg-green-50 border border-green-100 rounded-lg p-3">
                                     <div className="flex items-start gap-2">
-                                        <ShieldCheck className={`h-4 w-4 ${paymentMethod === 'khalti' ? 'text-purple-600' : 'text-green-600'} mt-0.5 flex-shrink-0`} />
-                                        <div className={`text-xs ${paymentMethod === 'khalti' ? 'text-purple-800' : 'text-green-800'}`}>
-                                            <strong>Secure Payment:</strong> Your payment information is encrypted and secure. {paymentMethod === 'khalti' ? 'Khalti' : 'eSewa'} supports multiple payment methods including mobile banking, cards, and wallet balance.
-                                        </div>
+                                        <ShieldCheck className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                        <p className="text-xs text-green-800">
+                                            <strong>Secure Payment:</strong> Your payment is encrypted and secure. eSewa supports mobile banking, cards, and wallet balance.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -415,17 +347,13 @@ const BookingModal = ({ hotel, isOpen, onClose, onSuccess }) => {
 
                         <DialogFooter className="px-6 pb-6 gap-2">
                             <Button variant="outline" onClick={onClose}>Cancel</Button>
-                            <Button 
-                                onClick={handlePayment} 
-                                disabled={loading} 
-                                className={`gap-2 ${
-                                    paymentMethod === 'khalti' 
-                                        ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700' 
-                                        : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
-                                }`}
+                            <Button
+                                onClick={handlePayment}
+                                disabled={loading}
+                                className="gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                             >
-                                {loading ? 'Processing...' : `Pay with ${paymentMethod === 'khalti' ? 'Khalti' : 'eSewa'}`} 
-                                {paymentMethod === 'khalti' ? <Smartphone className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                                {loading ? 'Processing...' : 'Pay with eSewa'}
+                                <Wallet className="h-4 w-4" />
                             </Button>
                         </DialogFooter>
                     </>

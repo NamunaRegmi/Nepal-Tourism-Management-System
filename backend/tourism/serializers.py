@@ -6,7 +6,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone', 'profile_picture']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone', 'profile_picture', 'company_name']
         read_only_fields = ['id']
 
 
@@ -30,10 +30,37 @@ class RoomSerializer(serializers.ModelSerializer):
         return obj.image or ''
 
 
+class HotelListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for listing hotels (no nested rooms)."""
+    provider_name = serializers.CharField(source='provider.username', read_only=True, allow_null=True)
+    destination_id = serializers.IntegerField(read_only=True)
+    destination_name = serializers.CharField(source='destination.name', read_only=True)
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Hotel
+        fields = [
+            'id', 'provider', 'provider_name', 'destination', 'destination_id', 'destination_name',
+            'name', 'description', 'property_type',
+            'image', 'image_url', 'rating',
+            'price_per_night', 'currency', 'amenities',
+            'address', 'total_rooms', 'is_active',
+        ]
+        read_only_fields = ['id', 'provider', 'destination']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image_file:
+            url = obj.image_file.url
+            return request.build_absolute_uri(url) if request else url
+        return obj.image or ''
+
+
 class HotelSerializer(serializers.ModelSerializer):
     rooms = RoomSerializer(many=True, read_only=True)
     provider_name = serializers.CharField(source='provider.username', read_only=True, allow_null=True)
     destination_id = serializers.IntegerField(read_only=True)
+    destination_name = serializers.CharField(source='destination.name', read_only=True)
     image_url = serializers.SerializerMethodField()
     image_file = serializers.ImageField(required=False, allow_null=True, write_only=True)
 
@@ -47,7 +74,8 @@ class HotelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Hotel
         fields = [
-            'id', 'provider', 'provider_name', 'destination', 'destination_id', 'name', 'description',
+            'id', 'provider', 'provider_name', 'destination', 'destination_id', 'destination_name',
+            'name', 'description', 'property_type',
             'image', 'image_file', 'image_url', 'rating',
             'price_per_night', 'currency', 'amenities',
             'contact_number', 'email', 'address', 'total_rooms',

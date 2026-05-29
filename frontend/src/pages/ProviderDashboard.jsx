@@ -59,9 +59,14 @@ const ProviderDashboard = ({ onNavigate }) => {
   const [hotelForm, setHotelForm] = useState({
     name: '',
     destination_id: '',
+    property_type: 'hotel',
     description: '',
     price_per_night: '',
+    currency: 'NPR',
     address: '',
+    contact_number: '',
+    email: '',
+    total_rooms: '',
     image: '',
     amenities: ''
   });
@@ -191,9 +196,14 @@ const ProviderDashboard = ({ onNavigate }) => {
     setHotelForm({
       name: '',
       destination_id: '',
+      property_type: 'hotel',
       description: '',
       price_per_night: '',
+      currency: 'NPR',
       address: '',
+      contact_number: '',
+      email: '',
+      total_rooms: '',
       image: '',
       amenities: ''
     });
@@ -208,11 +218,16 @@ const ProviderDashboard = ({ onNavigate }) => {
     setHotelForm({
       name: hotel.name || '',
       destination_id: hotel.destination_id || '',
+      property_type: hotel.property_type || 'hotel',
       description: hotel.description || '',
       price_per_night: hotel.price_per_night || '',
+      currency: hotel.currency || 'NPR',
       address: hotel.address || '',
+      contact_number: hotel.contact_number || '',
+      email: hotel.email || '',
+      total_rooms: hotel.total_rooms || '',
       image: hotel.image || '',
-      amenities: hotel.amenities || ''
+      amenities: Array.isArray(hotel.amenities) ? hotel.amenities.join(', ') : (hotel.amenities || '')
     });
     setHotelImageFile(null);
     setHotelImagePreview(hotel.image || '');
@@ -258,9 +273,14 @@ const ProviderDashboard = ({ onNavigate }) => {
       const payload = {
         name: hotelForm.name.trim(),
         destination_id: hotelForm.destination_id,
+        property_type: hotelForm.property_type || 'hotel',
         description: hotelForm.description.trim(),
         price_per_night: hotelForm.price_per_night,
+        currency: hotelForm.currency || 'NPR',
         address: hotelForm.address.trim(),
+        contact_number: hotelForm.contact_number.trim(),
+        email: hotelForm.email.trim(),
+        total_rooms: hotelForm.total_rooms ? Number(hotelForm.total_rooms) : 0,
         amenities: hotelForm.amenities,
         image: imageUrl || DEFAULT_HOTEL_IMAGE,
       };
@@ -1059,7 +1079,21 @@ const ProviderDashboard = ({ onNavigate }) => {
                 )}
               </div>
               <div>
-                <Label htmlFor="price">Price per Night (Rs.)</Label>
+                <Label htmlFor="property_type">Property Type</Label>
+                <select
+                  id="property_type"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={hotelForm.property_type}
+                  onChange={(e) => setHotelForm({ ...hotelForm, property_type: e.target.value })}
+                >
+                  <option value="hotel">Hotel</option>
+                  <option value="villa">Villa</option>
+                  <option value="resort">Resort</option>
+                  <option value="homestay">Homestay</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="price">Price per Night</Label>
                 <Input
                   id="price"
                   type="number"
@@ -1069,12 +1103,53 @@ const ProviderDashboard = ({ onNavigate }) => {
                 />
               </div>
               <div>
+                <Label htmlFor="currency">Currency</Label>
+                <select
+                  id="currency"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={hotelForm.currency}
+                  onChange={(e) => setHotelForm({ ...hotelForm, currency: e.target.value })}
+                >
+                  <option value="NPR">NPR (Rs.)</option>
+                  <option value="USD">USD ($)</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="total_rooms">Total Rooms</Label>
+                <Input
+                  id="total_rooms"
+                  type="number"
+                  value={hotelForm.total_rooms}
+                  onChange={(e) => setHotelForm({...hotelForm, total_rooms: e.target.value})}
+                  placeholder="Number of rooms"
+                />
+              </div>
+              <div>
                 <Label htmlFor="address">Address</Label>
                 <Input
                   id="address"
                   value={hotelForm.address}
                   onChange={(e) => setHotelForm({...hotelForm, address: e.target.value})}
                   placeholder="Enter property address"
+                />
+              </div>
+              <div>
+                <Label htmlFor="contact_number">Contact Number</Label>
+                <Input
+                  id="contact_number"
+                  value={hotelForm.contact_number}
+                  onChange={(e) => setHotelForm({...hotelForm, contact_number: e.target.value})}
+                  placeholder="+977-98XXXXXXXX"
+                />
+              </div>
+              <div>
+                <Label htmlFor="hotel_email">Email</Label>
+                <Input
+                  id="hotel_email"
+                  type="email"
+                  value={hotelForm.email}
+                  onChange={(e) => setHotelForm({...hotelForm, email: e.target.value})}
+                  placeholder="property@example.com"
                 />
               </div>
             </div>

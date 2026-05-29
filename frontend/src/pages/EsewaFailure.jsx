@@ -42,17 +42,17 @@ export default function EsewaFailure({ onNavigate }) {
           )}
           <div className="space-y-2">
             <Button
-              onClick={() => onNavigate ? onNavigate('home') : window.location.href = '/'}
-              className="w-full"
+              onClick={() => onNavigate ? onNavigate('destination-results') : window.location.href = '/'}
+              className="w-full bg-green-600 hover:bg-green-700"
             >
-              Go Home
+              Browse Destinations
             </Button>
             <Button
-              onClick={() => window.history.back()}
+              onClick={() => onNavigate ? onNavigate('home') : window.location.href = '/'}
               variant="outline"
               className="w-full"
             >
-              Try Again
+              Go Home
             </Button>
           </div>
         </CardContent>

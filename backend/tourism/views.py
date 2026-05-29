@@ -3,7 +3,24 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.core.cache import cache
 import base64
+
+def bust_list_cache(*kinds):
+    """Invalidate cached list responses for the given resource kinds."""
+    for kind in kinds:
+        if kind == 'destinations':
+            cache.delete('destinations_list')
+        elif kind == 'hotels':
+            for key in ['all_hotels_', 'all_hotels_hotel', 'all_hotels_villa',
+                        'all_hotels_resort', 'all_hotels_homestay']:
+                cache.delete(key)
+        elif kind == 'packages':
+            cache.delete_many([f'packages_list_{i}' for i in range(100)])
+            cache.delete('packages_list_')
+        elif kind == 'guides':
+            cache.delete_many([f'guides_list_{i}' for i in range(100)])
+            cache.delete('guides_list_')
 from datetime import datetime, time, timedelta
 import json
 from zoneinfo import ZoneInfo
@@ -24,7 +41,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .models import User, Destination, Hotel, Room, Booking, Package, TourGuideProfile, GuideBooking, Review
 from .serializers import (
-    UserSerializer, DestinationSerializer, HotelSerializer,
+    UserSerializer, DestinationSerializer, HotelSerializer, HotelListSerializer,
     RoomSerializer, BookingSerializer, PackageSerializer,
     TourGuideProfileSerializer, GuideBookingSerializer, ReviewSerializer,
 )
@@ -508,6 +525,9 @@ class DestinationListView(APIView):
     permission_classes = [AllowAny]  # Anyone can view destinations
     
     def get(self, request):
+        cached = cache.get('destinations_list')
+        if cached is not None:
+            return Response(cached)
         destinations = Destination.objects.filter(is_active=True).annotate(
             hotels_count=models.Count(
                 'hotels',
@@ -515,8 +535,9 @@ class DestinationListView(APIView):
                 distinct=True,
             )
         )
-        serializer = DestinationSerializer(destinations, many=True, context={'request': request})
-        return Response(serializer.data)
+        data = DestinationSerializer(destinations, many=True, context={'request': request}).data
+        cache.set('destinations_list', data, 120)
+        return Response(data)
     
     def post(self, request):
         # Only authenticated users (admins/providers) can create destinations
@@ -535,6 +556,7 @@ class DestinationListView(APIView):
         serializer = DestinationSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(created_by=request.user)
+            bust_list_cache('destinations')
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -578,14 +600,15 @@ class DestinationDetailView(APIView):
             serializer = DestinationSerializer(destination, data=request.data, partial=True, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
+                bust_list_cache('destinations')
                 return Response(serializer.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Destination.DoesNotExist:
             return Response(
-                {'error': 'Destination not found'}, 
+                {'error': 'Destination not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-    
+
     def delete(self, request, pk):
         if not request.user.is_authenticated:
             return Response(
@@ -603,6 +626,7 @@ class DestinationDetailView(APIView):
             destination = Destination.objects.get(pk=pk)
             destination.is_active = False  # Soft delete
             destination.save()
+            bust_list_cache('destinations')
             return Response(
                 {'message': 'Destination deleted successfully'}, 
                 status=status.HTTP_204_NO_CONTENT
@@ -615,10 +639,28 @@ class DestinationDetailView(APIView):
 
 
 # Hotel Views
+class AllHotelsListView(APIView):
+    """List all active hotels, optionally filtered by property_type"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        property_type = request.query_params.get('type') or ''
+        cache_key = f'all_hotels_{property_type}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+        qs = Hotel.objects.filter(is_active=True).select_related('destination', 'provider')
+        if property_type:
+            qs = qs.filter(property_type=property_type)
+        data = HotelListSerializer(qs, many=True, context={'request': request}).data
+        cache.set(cache_key, data, 120)
+        return Response(data)
+
+
 class HotelListView(APIView):
     """List hotels for a specific destination or create a new hotel"""
     permission_classes = [AllowAny]
-    
+
     def get(self, request, destination_id):
         hotels = Hotel.objects.filter(destination_id=destination_id, is_active=True)
         serializer = HotelSerializer(hotels, many=True, context={'request': request})
@@ -648,6 +690,7 @@ class HotelListView(APIView):
         serializer = HotelSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(destination=destination, provider=request.user)
+            bust_list_cache('hotels')
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -697,6 +740,7 @@ class ProviderHotelListView(APIView):
         serializer = HotelSerializer(data=payload, context={'request': request})
         if serializer.is_valid():
             serializer.save(destination=destination, provider=request.user)
+            bust_list_cache('hotels')
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -754,6 +798,7 @@ class HotelDetailView(APIView):
                     serializer.save(destination=destination)
                 else:
                     serializer.save()
+                bust_list_cache('hotels')
                 return Response(serializer.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Hotel.DoesNotExist:
@@ -789,6 +834,7 @@ class HotelDetailView(APIView):
 
         hotel.is_active = False
         hotel.save()
+        bust_list_cache('hotels')
         return Response(
             {'message': 'Hotel deleted successfully'},
             status=status.HTTP_204_NO_CONTENT
@@ -882,15 +928,20 @@ class PackageListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        destination_id = request.query_params.get('destination_id') or ''
+        cache_key = f'packages_list_{destination_id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
         qs = Package.objects.filter(is_active=True).select_related('provider').prefetch_related('destinations')
-        destination_id = request.query_params.get('destination_id')
         if destination_id:
             qs = qs.filter(
                 models.Q(destinations__id=destination_id) |
                 models.Q(destination__icontains=Destination.objects.filter(id=destination_id).values_list('name', flat=True).first() or '')
             ).distinct()
-        serializer = PackageSerializer(qs, many=True, context={'request': request})
-        return Response(serializer.data)
+        data = PackageSerializer(qs, many=True, context={'request': request}).data
+        cache.set(cache_key, data, 120)
+        return Response(data)
 
 
 class ProviderPackageListView(APIView):
@@ -919,6 +970,7 @@ class ProviderPackageListView(APIView):
         serializer = PackageSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(provider=request.user)
+            bust_list_cache('packages')
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1003,6 +1055,7 @@ class BookingListView(APIView):
         serializer = BookingSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(user=request.user)
+            bust_list_cache('guides')
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1225,12 +1278,17 @@ class TourGuideListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        dest_id = request.query_params.get('destination') or ''
+        cache_key = f'guides_list_{dest_id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
         qs = TourGuideProfile.objects.filter(is_active=True).select_related('user').prefetch_related('destinations')
-        dest_id = request.query_params.get('destination')
         if dest_id:
             qs = qs.filter(destinations__id=dest_id).distinct()
-        serializer = TourGuideProfileSerializer(qs, many=True, context={'request': request})
-        return Response(serializer.data)
+        data = TourGuideProfileSerializer(qs, many=True, context={'request': request}).data
+        cache.set(cache_key, data, 120)
+        return Response(data)
 
 
 class TourGuideDetailView(APIView):
@@ -1494,13 +1552,16 @@ Candidates:
 Reply with ONLY a valid JSON array, no markdown fences, no extra text:
 [{{"id": <int>, "reason": "<sentence>"}}, ...]"""
 
-            client = Groq(api_key=api_key, timeout=4.0)
+            import httpx as _httpx
+            _http = _httpx.Client(timeout=_httpx.Timeout(connect=5.0, read=25.0, write=5.0, pool=5.0))
+            client = Groq(api_key=api_key, http_client=_http)
             response = client.chat.completions.create(
                 model='llama-3.1-8b-instant',
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.3,
                 max_tokens=350,
             )
+            _http.close()
 
             raw = (response.choices[0].message.content or '').strip()
             if raw.startswith('```'):
@@ -1734,13 +1795,16 @@ Destinations:
 Reply with ONLY a valid JSON array, no markdown fences, no extra text:
 [{{"id": <int>, "reason": "<sentence>"}}, ...]"""
 
-            client = Groq(api_key=api_key, timeout=4.0)
+            import httpx
+            http_client = httpx.Client(timeout=httpx.Timeout(connect=5.0, read=25.0, write=5.0, pool=5.0))
+            client = Groq(api_key=api_key, http_client=http_client)
             response = client.chat.completions.create(
                 model='llama-3.1-8b-instant',
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.4,
                 max_tokens=350,
             )
+            http_client.close()
 
             raw = (response.choices[0].message.content or '').strip()
             if raw.startswith('```'):

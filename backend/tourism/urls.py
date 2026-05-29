@@ -12,6 +12,7 @@ from .views import (
     DestinationDetailView,
     DestinationRecommendationView,
     DestinationExploreRecommendationView,
+    AllHotelsListView,
     HotelListView,
     ProviderHotelListView,
     HotelDetailView,
@@ -62,6 +63,7 @@ urlpatterns = [
     path('destinations/explore-recommendations/', DestinationExploreRecommendationView.as_view(), name='destination-explore-recommendations'),
     
     # Hotel URLs
+    path('hotels/', AllHotelsListView.as_view(), name='all-hotels'),
     path('destinations/<int:destination_id>/hotels/', HotelListView.as_view(), name='hotel-list'),
     path('provider/hotels/', ProviderHotelListView.as_view(), name='provider-hotel-list'),
     path('hotels/<int:pk>/', HotelDetailView.as_view(), name='hotel-detail'),

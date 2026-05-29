@@ -11,7 +11,6 @@ const api = axios.create({
     },
 });
 
-// Add a request interceptor to add the auth token to requests
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('access_token');
@@ -20,13 +19,18 @@ api.interceptors.request.use(
         }
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
-// Auth endpoints that legitimately require a token — don't retry these without auth
-const AUTH_REQUIRED_PATHS = ['/auth/profile/', '/bookings/', '/guide-bookings/', '/admin/'];
+const AUTH_REQUIRED_PATHS = [
+    '/auth/profile/',
+    '/bookings/',
+    '/guide-bookings/',
+    '/admin/',
+    '/provider/',
+    '/guides/me/',
+    '/reviews/',
+];
 
 let isRefreshing = false;
 let refreshQueue = [];
@@ -39,10 +43,14 @@ function processRefreshQueue(newToken, error) {
     refreshQueue = [];
 }
 
-function clearSession() {
+export function clearSession() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+    localStorage.removeItem('wishlist');
+    localStorage.removeItem('package_wishlist');
+    localStorage.removeItem('travel_preferences');
+    localStorage.removeItem('esewa_booking_id');
     notifyAppDataChanged();
 }
 
@@ -58,10 +66,8 @@ api.interceptors.response.use(
             const needsAuth = AUTH_REQUIRED_PATHS.some((p) => url.includes(p));
             const refreshToken = localStorage.getItem('refresh_token');
 
-            // Try to refresh the access token if we have a refresh token
-            if (needsAuth && refreshToken) {
+            if (refreshToken) {
                 if (isRefreshing) {
-                    // Another request already refreshing — queue this one
                     return new Promise((resolve, reject) => {
                         refreshQueue.push({ resolve, reject });
                     }).then((newToken) => {
@@ -77,22 +83,20 @@ api.interceptors.response.use(
                     });
                     const newToken = data.access;
                     localStorage.setItem('access_token', newToken);
-                    api.defaults.headers['Authorization'] = `Bearer ${newToken}`;
+                    api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
                     processRefreshQueue(newToken, null);
                     originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
                     return api(originalRequest);
                 } catch {
                     processRefreshQueue(null, error);
                     clearSession();
+                    return Promise.reject(error);
                 } finally {
                     isRefreshing = false;
                 }
-                return Promise.reject(error);
             }
 
             if (!needsAuth) {
-                // Public endpoint — strip auth and retry once
-                clearSession();
                 delete originalRequest.headers['Authorization'];
                 return api(originalRequest);
             }
@@ -114,25 +118,21 @@ export const authService = {
     googleLogin: (credential, role) => api.post('auth/google/', { credential, role }),
     getProfile: () => api.get('auth/profile/'),
     updateProfile: (data) => api.put('auth/profile/', data),
-    logout: () => Promise.resolve().then(() => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
-        notifyAppDataChanged();
-    }),
+    logout: () => Promise.resolve().then(() => clearSession()),
 };
 
 export const destinationService = {
     getAll: () => api.get('destinations/'),
     getById: (id) => api.get(`destinations/${id}/`),
     getRecommendations: (id, params) => api.get(`destinations/${id}/recommendations/`, { params }),
-    getExploreRecommendations: (params) => api.get('destinations/explore-recommendations/', { params }),
+    getExploreRecommendations: (params) => api.get('destinations/explore-recommendations/', { params, timeout: 35000 }),
     create: (data) => api.post('destinations/', data),
     update: (id, data) => api.put(`destinations/${id}/`, data),
     delete: (id) => api.delete(`destinations/${id}/`),
 };
 
 export const hotelService = {
+    getAll: (type) => api.get('hotels/', { params: type ? { type } : {} }),
     getByDestination: (destId) => api.get(`destinations/${destId}/hotels/`),
     getMyHotels: () => api.get('provider/hotels/'),
     getById: (id) => api.get(`hotels/${id}/`),
@@ -193,7 +193,6 @@ export const adminService = {
     updateProvider: (id, data) => api.put(`admin/providers/${id}/`, data),
     deleteProvider: (id) => api.delete(`admin/providers/${id}/`),
     getAllPackages: () => api.get('admin/packages/'),
-    // Same data as BookingListView for admin role (backend returns all bookings)
     getAllBookings: () => api.get('bookings/'),
 };
 

@@ -37,6 +37,7 @@ export function getNavLinksForRole(role) {
       return [
         { label: 'Home', key: 'home' },
         { label: 'Explore', key: 'destination-results' },
+        { label: 'Properties', key: 'hotels' },
         { label: 'Packages', key: 'tours' },
         { label: 'Tour Guides', key: 'guides' },
         { label: 'Profile', key: 'user-profile' },
@@ -45,6 +46,7 @@ export function getNavLinksForRole(role) {
       return [
         { label: 'Provider Dashboard', key: 'provider-dashboard' },
         { label: 'Destinations', key: 'destination-results' },
+        { label: 'Properties', key: 'hotels' },
         { label: 'Tours', key: 'tours' },
         { label: 'About', key: 'about' },
       ];
@@ -59,6 +61,7 @@ export function getNavLinksForRole(role) {
       return [
         { label: 'Admin Dashboard', key: 'admin-dashboard' },
         { label: 'Destinations', key: 'destination-results' },
+        { label: 'Properties', key: 'hotels' },
         { label: 'Tours', key: 'tours' },
         { label: 'About', key: 'about' },
       ];
@@ -66,6 +69,7 @@ export function getNavLinksForRole(role) {
       return [
         { label: 'Home', key: 'home' },
         { label: 'Destinations', key: 'destination-results' },
+        { label: 'Properties', key: 'hotels' },
         { label: 'Tours', key: 'tours' },
         { label: 'Tour guides', key: 'guides' },
         { label: 'About', key: 'about' },

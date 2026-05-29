@@ -31,19 +31,15 @@ class EsewaService {
     try {
       console.log('Initiating eSewa payment for booking:', bookingId);
 
-      const successCallbackUrl = this.buildCallbackUrl(
-        successUrl,
-        '/payment/esewa/success'
-      );
-      const failureCallbackUrl = this.buildCallbackUrl(
-        failureUrl,
-        '/payment/esewa/failure'
-      );
-      
+      // Use direct frontend URLs — EsewaSuccess/EsewaFailure pages handle
+      // verification themselves, so no backend callback redirect is needed.
+      const finalSuccessUrl = successUrl || `${window.location.origin}/payment/esewa/success`;
+      const finalFailureUrl = failureUrl || `${window.location.origin}/payment/esewa/failure`;
+
       const response = await api.post('/payment/esewa/initiate/', {
         booking_id: bookingId,
-        success_url: successCallbackUrl,
-        failure_url: failureCallbackUrl
+        success_url: finalSuccessUrl,
+        failure_url: finalFailureUrl,
       });
       
       console.log('eSewa initiation response:', response.data);

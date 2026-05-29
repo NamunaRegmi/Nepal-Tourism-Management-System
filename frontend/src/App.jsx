@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import { getLandingPageForRole, getStoredUser, getUserRole, isDashboardPage } from './lib/roleNavigation';
 
 const About = lazy(() => import('./pages/About'));
+const Hotels = lazy(() => import('./pages/Hotels'));
 const UserDashboard = lazy(() => import('./pages/UserDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ProviderDashboard = lazy(() => import('./pages/ProviderDashboard'));
@@ -22,6 +23,7 @@ const EsewaSuccess = lazy(() => import('./pages/EsewaSuccess'));
 const EsewaFailure = lazy(() => import('./pages/EsewaFailure'));
 const AuthModal = lazy(() => import('./components/AuthModal'));
 const Chatbot = lazy(() => import('./components/Chatbot'));
+const CookieConsent = lazy(() => import('./components/CookieConsent'));
 
 function PageFallback() {
   return (
@@ -61,6 +63,8 @@ function getPathForPage(page, options = {}) {
       return '/destinations';
     case 'destination-detail':
       return options.destinationId ? `/destinations/${options.destinationId}` : '/destinations';
+    case 'hotels':
+      return '/hotels';
     case 'tours':
       return '/tours';
     case 'about':
@@ -118,6 +122,8 @@ function getRouteState(pathname, fallbackPage) {
       return { page: 'user-wishlist' };
     case '/destinations':
       return { page: 'destination-results' };
+    case '/hotels':
+      return { page: 'hotels' };
     case '/tours':
       return { page: 'tours' };
     case '/about':
@@ -143,6 +149,7 @@ export default function App() {
   });
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [selectedGuideId, setSelectedGuideId] = useState(null);
+  const [hotelsFilter, setHotelsFilter] = useState('');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [browserLocation, setBrowserLocation] = useState(() => getBrowserLocation());
 
@@ -206,11 +213,15 @@ export default function App() {
     }
   };
 
-  const handleNavigate = (page) => {
+  const handleNavigate = (page, options = {}) => {
     if (page === 'auth') {
       syncBrowserPath(getPathForPage('home'));
       setIsAuthModalOpen(true);
       return;
+    }
+
+    if (page === 'hotels') {
+      setHotelsFilter(options.type || '');
     }
 
     syncBrowserPath(getPathForPage(page));
@@ -303,6 +314,12 @@ export default function App() {
           onNavigate={handleNavigate} 
           onSelectDestination={openDestination}
         />;
+      case 'hotels':
+        return <Hotels
+          onNavigate={handleNavigate}
+          onSelectDestination={openDestination}
+          initialType={hotelsFilter}
+        />;
       case 'tours':
         return <Tours onNavigate={handleNavigate} />;
       case 'about':
@@ -359,6 +376,9 @@ export default function App() {
       )}
       <Suspense fallback={null}>
         <Chatbot />
+      </Suspense>
+      <Suspense fallback={null}>
+        <CookieConsent />
       </Suspense>
       <Toaster position="top-right" />
     </div>
